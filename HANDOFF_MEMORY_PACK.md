@@ -113,15 +113,25 @@ E:\MedGuard\
 
 **Debugging doctrine:** if live audit misbehaves, bug is in step 4 (plumbing), never step 1 (brain — proven offline first).
 
-## 9. CURRENT PROJECT STATE (as of handoff)
+## 9. CURRENT PROJECT STATE (updated 2026-09-02 — END OF BUILD DAY)
 
-- ✅ Deep research done; all comparisons validated; RESEARCH_AND_PLAN.md written (E:\MedGuard) — includes an "UPDATE 2026-08-31" noting the model swap to gpt-oss-120b
-- ✅ All 20 decisions locked (§3)
-- ✅ Groq account + NEW key working; smoke test printed OK from `openai/gpt-oss-120b` (tested in Google Colab with the key in Colab's 🔑 vault named GROQ_API_KEY)
-- ✅ User's available Groq models verified via models.list(): openai/gpt-oss-120b, openai/gpt-oss-20b, openai/gpt-oss-safeguard-20b, qwen/qwen3.8-27b, qwen/qwen3.6-27b, allam-2-7b, groq/compound(-mini), whisper/orpheus (audio — irrelevant), llama-prompt-guard (86M/22M safety classifiers — noted only)
-- ⏸️ BUILD NOT STARTED — user explicitly said "don't start the project yet"
-- ⬜ User still needs: GitHub account (repo medguard-audit) and Hugging Face account (free) — needed only at steps 7–8
-- ❗ Lessons from the session: (a) Groq model IDs deprecate — model name must be config, never hardcoded; verify via models.list(); (b) user pasted an API key into chat once — it was revoked; enforce vault-only key handling; (c) gpt-oss models are reasoning models — they need reasoning_effort="low" and larger max_tokens; content can come back empty if max_tokens too small
+- ✅ **BUILD COMPLETE AND VERIFIED.** All milestones M0–M8 done:
+  - 27/27 offline pytest GREEN (verdict brain proven before any API use)
+  - 5/5 live end-to-end tests GREEN (real Groq calls): golden bad answer → BLOCKED/0% with CONTRADICTION + verbatim quote; good answer → SAFE/100%; both abstention paths correct; evidence quotes verified verbatim
+  - HHEM ensemble verified live: bad answer 0.0129 vs good answer higher (directional separation PASS)
+  - Full pipeline latency ~22s (reasoning model + HHEM)
+- ✅ Code pushed to GitHub: https://github.com/ambrishraj06/med_guard (single clean commit; `.hfcache`/`.nltk_data` git-ignored after an initial staging catch)
+- ✅ Groq verified working with `openai/gpt-oss-120b` (key lives in E:\MedGuard\.streamlit\secrets.toml — user-created, never in chat/repo)
+- ⚠️ SECURITY INCIDENTS HANDLED: (1) a leaked key in chat was revoked + regenerated; (2) GitHub push protection caught the OLD revoked key inside `.streamlit/secrets.toml.example` (user had pasted it there) — file restored to placeholder and git history rebuilt from scratch so no secret exists in any commit. Key lesson: push protection scans ALL commits; keep secrets files out of git entirely.
+- ⏳ DEPLOYMENT STATUS:
+  - Streamlit Community Cloud: user deployed (repo ambrishraj06/med_guard, app.py) + needs GROQ_API_KEY in app Secrets. Production verification (browser test of golden case on the live URL) NOT yet done — user was running the 8-test battery manually.
+  - HF Spaces: BLOCKED BY POLICY, not by code — free tier no longer includes cpu-basic flavor for Streamlit Spaces (limit=0 on two separate accounts; SDK flip to streamlit via README frontmatter worked, build refused at quota). Spaces exist at ambrishrs06/med_guard and ambrishrs69/med_guard (can be deleted). Do NOT retry HF free tier.
+- ⬜ NEXT STEPS (in order):
+  1. Verify production: user pastes live URL → run golden case in browser → expect BLOCKED/0%
+  2. User runs the 8-test battery (golden/Safe/Unverifiable/Warning/negation-flip/dose-error/invented-study/grounding-showcase) — full test battery is in chat history; dangerous answers must never return SAFE
+  3. OPTIONAL UPGRADE: add tiny NLI cross-checker (cross-encoder/nli-deberta-v3-small ~140MB) as third dropdown entry — fits any host incl. 512MB tiers
+  4. Phase 2 roadmap: mini demo RAG bot (same Groq key) so sources flow automatically; FastAPI endpoint; Oracle Cloud Always Free ARM VM (12-24GB RAM, always free) to unlock MiniCheck + 24/7; eval set with precision/recall
+- ❗ Lessons: (a) Groq model IDs deprecate — model name is config; (b) never paste keys in chat; gpt-oss = reasoning model (reasoning_effort="low", generous max_tokens); (d) transformers MUST stay <5 for HHEM; (e) HF free tier 2026 = no free cpu-basic for Streamlit — use Streamlit Cloud or Oracle ARM.
 
 ## 10. WHAT THE NEXT AI SHOULD DO
 
