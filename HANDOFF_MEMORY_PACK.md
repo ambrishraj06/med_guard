@@ -124,8 +124,9 @@ E:\MedGuard\
 - ✅ Groq verified working with `openai/gpt-oss-120b` (key lives in E:\MedGuard\.streamlit\secrets.toml — user-created, never in chat/repo)
 - ⚠️ SECURITY INCIDENTS HANDLED: (1) a leaked key in chat was revoked + regenerated; (2) GitHub push protection caught the OLD revoked key inside `.streamlit/secrets.toml.example` (user had pasted it there) — file restored to placeholder and git history rebuilt from scratch so no secret exists in any commit. Key lesson: push protection scans ALL commits; keep secrets files out of git entirely.
 - ⏳ DEPLOYMENT STATUS:
-  - Streamlit Community Cloud: user deployed (repo ambrishraj06/med_guard, app.py) + needs GROQ_API_KEY in app Secrets. Production verification (browser test of golden case on the live URL) NOT yet done — user was running the 8-test battery manually.
+  - **Streamlit Community Cloud: LIVE AND PRODUCTION-VERIFIED (2026-09-02)** at https://medguardauidt.streamlit.app/ — browser-automated acceptance test passed BOTH paths on the deployed app: golden bad answer → 🔴 BLOCKED/0% with verbatim contradiction quote; good answer → 🟢 SAFE/100% with 2 atomic SUPPORTED claims + verbatim quotes; premium dark UI renders correctly; secrets vault working ("key loaded from secrets/env").
   - HF Spaces: BLOCKED BY POLICY, not by code — free tier no longer includes cpu-basic flavor for Streamlit Spaces (limit=0 on two separate accounts; SDK flip to streamlit via README frontmatter worked, build refused at quota). Spaces exist at ambrishrs06/med_guard and ambrishrs69/med_guard (can be deleted). Do NOT retry HF free tier.
+  - Fallback hosts researched: Oracle Cloud Always Free ARM (12-24GB RAM, always free — unlocks MiniCheck + 24/7; DIY Linux VM, card needed at signup), Koyeb (512MB), Render (512MB, sleeps).
 - ⬜ NEXT STEPS (in order):
   1. Verify production: user pastes live URL → run golden case in browser → expect BLOCKED/0%
   2. User runs the 8-test battery (golden/Safe/Unverifiable/Warning/negation-flip/dose-error/invented-study/grounding-showcase) — full test battery is in chat history; dangerous answers must never return SAFE
