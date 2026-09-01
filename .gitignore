@@ -1,0 +1,31 @@
+# --- SECRETS: never commit ---
+.streamlit/secrets.toml
+*.key
+.env
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+venv/
+.venv/
+
+# --- Models / caches (big) ---
+.pipcache/
+.hfcache/
+.nltk_data/
+ckpts/
+models/
+*.safetensors
+*.bin
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# --- Streamlit ---
+.streamlit/secrets.toml
+.streamlit_test.log

@@ -1,0 +1,13 @@
+# MedGuard dependencies
+# (the --extra-index-url line forces the LIGHT CPU build of torch — required for HHEM)
+
+--extra-index-url https://download.pytorch.org/whl/cpu
+streamlit>=1.40
+groq>=0.11
+torch==2.14.0+cpu
+transformers<5
+accelerate
+minicheck @ git+https://github.com/Liyan06/MiniCheck.git
+
+# NOTE: transformers MUST stay on 4.x — HHEM's custom model code breaks on v5
+# (verified 2026-08-31: AttributeError 'all_tied_weights_keys' on transformers 5.x)
