@@ -23,8 +23,9 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from medguard.audit import DEFAULT_JUDGE_MODEL, run_audit  # noqa: E402
+from medguard.audit import DEFAULT_JUDGE_MODEL, generate_answer, run_audit  # noqa: E402
 from medguard.crosscheck import available_checkers  # noqa: E402
+from medguard.library import match_source  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Page + golden case
@@ -161,6 +162,15 @@ def render_header() -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+def compute_unverifiable() -> dict:
+    """Plain abstention card shown when no guideline can be matched (no LLM call)."""
+    return {
+        "verdict": "UNVERIFIABLE",
+        "coverage": 0,
+        "reason": "No source text provided. MedGuard cannot verify grounding without evidence.",
+    }
 
 
 def render_verdict(verdict: str, coverage: int, reason: str) -> None:
@@ -320,10 +330,10 @@ TEST_CASES = {
         "s": GOLDEN["source"],
         "a": GOLDEN["good_answer"],
     },
-    "T3 · ⚪ No source (UNVERIFIABLE)": {
-        "q": "What is the first-line antibiotic for uncomplicated UTI in pregnant women?",
+    "T3 · ⚪ Unknown topic (UNVERIFIABLE — abstention)": {
+        "q": "What is the recommended management for Zellweger spectrum disorder?",
         "s": "",
-        "a": GOLDEN["bad_answer"],
+        "a": "Zellweger spectrum disorder is managed by a team of specialists.",
     },
     "T4 · 🟡 Half-true lifestyle answer (WARNING)": {
         "q": "What lifestyle changes are recommended for a patient with newly diagnosed high blood pressure?",
@@ -391,22 +401,24 @@ elif TEST_CASES[preset] is None:
     st.session_state["_loaded_preset"] = preset
 
 question = st.text_area(
-    "❓ The question someone asked the AI",
+    "❓ Your question",
     value=st.session_state.get("mg_question", GOLDEN["question"]),
     key="mg_question",
     height=68,
 )
 source = st.text_area(
-    "📖 The guideline (what the answer SHOULD say)",
+    "📖 The guideline — leave empty and we auto-pick it from our library",
     value=st.session_state.get("mg_source", GOLDEN["source"]),
     key="mg_source",
     height=110,
+    help="If you leave this empty, MedGuard matches your question against its built-in library of public-guideline topics.",
 )
 answer = st.text_area(
-    "🤖 The AI answer to check",
+    "🤖 The AI answer to check — leave empty and we'll write one from the guideline",
     value=st.session_state.get("mg_answer", GOLDEN["bad_answer"]),
     key="mg_answer",
     height=110,
+    help="Auditing someone else's chatbot? Paste its answer here. Just asking for yourself? Leave it empty and MedGuard generates + checks one for you.",
 )
 
 run_clicked = st.button(
@@ -419,8 +431,37 @@ run_clicked = st.button(
 # Run + render
 # ---------------------------------------------------------------------------
 if run_clicked:
+    if not question.strip():
+        st.warning("Type a question first.")
+        st.stop()
+
+    # --- Auto-pick the guideline from the built-in library if none provided ---
+    if not source.strip():
+        match, score = match_source(question)
+        if match is None:
+            st.warning(
+                "No guideline topic in our built-in library matched this question. "
+                "MedGuard refuses to judge without evidence — that's the abstention safety feature. "
+                "To audit properly, paste a guideline into the guideline box and run again."
+            )
+            verdict_preview = compute_unverifiable()
+            render_verdict(verdict_preview["verdict"], verdict_preview["coverage"], verdict_preview["reason"])
+            st.stop()
+        source = match["text"]
+        st.info(f"📖 Auto-matched guideline topic: **{match['topic']}**  ·  _{match['reference']}_")
+
+    # --- Generate an answer if none provided (Ask & Check mode) ---------------
     if not answer.strip():
-        st.info("Enter (or keep) an AI answer to audit. Empty answer → UNVERIFIABLE verdict.")
+        with st.spinner("✍️ No answer provided — writing one from the guideline, then auditing it…"):
+            try:
+                answer = generate_answer(question, source, api_key=manual_key or None)
+            except Exception as err:
+                st.error(f"Answer generation failed: {err}")
+                st.stop()
+        st.info("🤖 You didn't provide an answer, so MedGuard **generated one from the guideline** (shown below) and then audited it.")
+        with st.expander("🤖 See the generated answer", expanded=False):
+            st.write(answer)
+
     with st.spinner("Auditing — extracting claims, verifying against the source…"):
         try:
             result = run_audit(

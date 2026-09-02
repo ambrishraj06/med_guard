@@ -86,6 +86,38 @@ For each claim, decide SUPPORTED / UNSUPPORTED / CONTRADICTION against the
 source text only, with verbatim evidence for SUPPORTED and CONTRADICTION.
 Return valid JSON only."""
 
+# ---------------------------------------------------------------------------
+# PROMPT 3 — Grounded answer generation (for the "Ask & Check" mode)
+# The GENERATOR is grounded the same way as the VERIFIER: source text only.
+# That's what makes the generated answers pass MedGuard's own audit honestly.
+# ---------------------------------------------------------------------------
+GENERATION_SYSTEM = """\
+You are a medical information assistant grounded in official guidelines.
+
+Answer the user's question using ONLY the SOURCE TEXT provided below.
+
+HARD RULES:
+- Use ONLY the source text. Never add medical information from your own knowledge.
+- If the source text does not contain enough information to answer, reply with
+  exactly this sentence: "The provided guideline text does not cover this question."
+- Keep the answer short, factual, and in plain language.
+- Output plain text only — no markdown, no headings, no JSON."""
+
+GENERATION_USER = """\
+SOURCE TEXT:
+{source}
+
+QUESTION: {question}
+
+Answer using only the source text."""
+
+
+def build_generation_messages(question: str, source: str) -> list[dict]:
+    return [
+        {"role": "system", "content": GENERATION_SYSTEM},
+        {"role": "user", "content": GENERATION_USER.format(source=source, question=question)},
+    ]
+
 
 def build_extraction_messages(answer: str) -> list[dict]:
     return [

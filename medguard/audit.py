@@ -288,6 +288,61 @@ def run_crosscheck(source: str, answer: str, checker: str) -> float | None:
 
 
 # ---------------------------------------------------------------------------
+# Step 0 — Grounded answer generation (Ask & Check mode: question in → answer out)
+# ---------------------------------------------------------------------------
+def generate_answer(
+    question: str,
+    source: str,
+    *,
+    model: str = DEFAULT_JUDGE_MODEL,
+    api_key: str | None = None,
+) -> str:
+    """Generate an answer to `question` using ONLY `source` (same epistemology
+    as the verifier). Plain-text call with the same retry/empty-content defense
+    as the JSON path."""
+    client = _get_client(api_key)
+    messages = prompts.build_generation_messages(question, source)
+    current_max_tokens = BASE_MAX_TOKENS
+    last_error: Exception | None = None
+
+    for _attempt in range(MAX_RETRIES):
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0,
+            "max_tokens": current_max_tokens,
+        }
+        if "gpt-oss" in model:
+            try:
+                response = client.chat.completions.create(**kwargs, reasoning_effort="low")
+                content = (response.choices[0].message.content or "").strip()
+                if content:
+                    return content
+                raise RuntimeError("Empty content from reasoning model.")
+            except RuntimeError as err:
+                last_error = err
+                current_max_tokens = int(current_max_tokens * 1.5)
+                continue
+            except Exception as err:  # SDK/API rejected reasoning_effort — plain retry
+                last_error = err
+        try:
+            response = client.chat.completions.create(**kwargs)
+            content = (response.choices[0].message.content or "").strip()
+            if content:
+                return content
+            raise RuntimeError("Empty content from reasoning model.")
+        except RuntimeError as err:
+            last_error = err
+            current_max_tokens = int(current_max_tokens * 1.5)
+            continue
+
+    raise RuntimeError(
+        f"Answer generation failed after {MAX_RETRIES} attempts (model={model}). "
+        f"Last error: {last_error}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Full pipeline — one function the UI calls
 # ---------------------------------------------------------------------------
 def run_audit(
