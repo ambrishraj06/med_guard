@@ -21,7 +21,8 @@ import re
 LIBRARY: list[dict] = [
     {
         "topic": "UTI in pregnancy",
-        "keywords": ["urine", "urinary", "uti", "bladder", "cystitis", "pregnant", "pregnancy"],
+        "source_name": "CDC / NICE",
+        "keywords": ["urine", "urinary", "uti", "bladder", "cystitis", "wee", "peeing", "burning", "pregnant", "pregnancy"],
         "reference": "Public guidance summary (WHO/CDC/NICE-style) — educational, simplified",
         "text": (
             "For uncomplicated cystitis in pregnant women, nitrofurantoin or cephalexin are "
@@ -31,7 +32,8 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "Fever in children",
-        "keywords": ["fever", "child", "kid", "temperature", "paracetamol", "viral", "virus"],
+        "source_name": "WHO / NICE",
+        "keywords": ["fever", "feverish", "child", "kid", "toddler", "baby", "temperature", "hot"],
         "reference": "Public guidance summary (WHO/CDC/NICE-style) — educational, simplified",
         "text": (
             "Aspirin should not be given to children with viral infections because of the risk of "
@@ -41,7 +43,8 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "Anaphylaxis emergency treatment",
-        "keywords": ["allergic", "allergy", "reaction", "adrenaline", "epipen", "anaphylaxis", "treat", "treatment"],
+        "source_name": "WHO / Resuscitation Council-style",
+        "keywords": ["anaphylaxis", "adrenaline", "epipen", "epipen", "throat closing", "swelling", "emergency", "shock"],
         "reference": "Public guidance summary (WHO/NICE-style) — educational, simplified",
         "text": (
             "Intramuscular adrenaline (epinephrine) 1:1000 at a dose of 0.5 mg should be administered "
@@ -51,6 +54,7 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "High blood pressure lifestyle changes",
+        "source_name": "NICE / WHO",
         "keywords": ["blood pressure", "salt", "exercise", "hypertension", "bp"],
         "reference": "Public guidance summary (WHO/ESC-style) — educational, simplified",
         "text": (
@@ -61,6 +65,7 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "Vitamin C and the common cold",
+        "source_name": "Public health guidance summary",
         "keywords": ["vitamin", "cold", "colds", "supplement", "c"],
         "reference": "Public guidance summary — educational, simplified",
         "text": (
@@ -70,6 +75,7 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "Paracetamol safe dosing and overdose",
+        "source_name": "FDA / MHRA-style",
         "keywords": ["paracetamol", "overdose", "liver", "dose", "painkiller"],
         "reference": "Public guidance summary (FDA/MHRA-style) — educational, simplified",
         "text": (
@@ -81,6 +87,7 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "Type 2 diabetes first-line treatment",
+        "source_name": "ADA / NICE",
         "keywords": ["diabetes", "sugar", "metformin", "diabetic"],
         "reference": "Public guidance summary (ADA/NICE-style) — educational, simplified",
         "text": (
@@ -91,7 +98,8 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "Antibiotics do not work on viruses",
-        "keywords": ["antibiotic", "antibiotics", "virus", "viral", "bacteria", "resistance", "cold", "flu"],
+        "source_name": "WHO / CDC",
+        "keywords": ["antibiotic", "antibiotics", "virus", "viral", "bacteria", "sore throat", "flu", "sinus"],
         "reference": "Public guidance summary (WHO/CDC-style) — educational, simplified",
         "text": (
             "Antibiotics are not effective against viral infections such as the common cold, flu, or "
@@ -101,6 +109,7 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "MMR vaccine and autism",
+        "source_name": "WHO / CDC",
         "keywords": ["mmr", "vaccine", "autism", "measles", "jab", "immunization", "immunisation"],
         "reference": "Public guidance summary (WHO/CDC-style) — educational, simplified",
         "text": (
@@ -110,6 +119,7 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "Iron deficiency anaemia",
+        "source_name": "NICE",
         "keywords": ["iron", "anaemia", "anemia", "tired", "haemoglobin", "hemoglobin"],
         "reference": "Public guidance summary (NICE-style) — educational, simplified",
         "text": (
@@ -120,6 +130,7 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "Asthma inhalers",
+        "source_name": "GINA / NICE",
         "keywords": ["asthma", "inhaler", "salbutamol", "wheeze", "breathing", "puffer"],
         "reference": "Public guidance summary (GINA/NICE-style) — educational, simplified",
         "text": (
@@ -130,7 +141,8 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "Penicillin allergy",
-        "keywords": ["penicillin", "allergy", "allergic", "cephalosporin", "antibiotic"],
+        "source_name": "NICE",
+        "keywords": ["penicillin", "amoxicillin", "cephalosporin", "rash", "reaction to antibiotic", "penicillin allergy", "allergic to penicillin"],
         "reference": "Public guidance summary (NICE-style) — educational, simplified",
         "text": (
             "Patients with a confirmed penicillin allergy should avoid penicillin antibiotics. "
@@ -140,6 +152,7 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "Diarrhoea and dehydration",
+        "source_name": "WHO",
         "keywords": ["diarrhoea", "diarrhea", "dehydration", "ors", "rehydration", "stool", "loose motion"],
         "reference": "Public guidance summary (WHO-style) — educational, simplified",
         "text": (
@@ -150,12 +163,143 @@ LIBRARY: list[dict] = [
     },
     {
         "topic": "Smoking cessation",
+        "source_name": "NICE / CDC",
         "keywords": ["smoking", "smoke", "quit", "cigarette", "vaping", "tobacco"],
         "reference": "Public guidance summary (NICE/CDC-style) — educational, simplified",
         "text": (
             "The most effective way to stop smoking combines behavioural support with medicines such "
             "as nicotine replacement therapy or varenicline. Quitting smoking reduces the risk of "
             "heart disease, stroke, and cancer at any age."
+        ),
+    },
+    {
+        "topic": "Dengue fever",
+        "source_name": "WHO / ICMR",
+        "keywords": ["dengue", "dengue fever", "breakbone", "platelet", "haemorrhagic", "hemorrhagic", "mosquito"],
+        "reference": "Public guidance summary (WHO/ICMR-style) — educational, simplified",
+        "text": (
+            "Dengue is a mosquito-borne viral infection. There is no specific antiviral medicine; "
+            "treatment is supportive — rest, plenty of fluids, and paracetamol for fever and pain. "
+            "NSAIDs such as aspirin or ibuprofen must be avoided because they increase the risk of "
+            "bleeding. Go to hospital immediately if warning signs appear: severe abdominal pain, "
+            "persistent vomiting, bleeding from gums or nose, blood in vomit or stool, or extreme "
+            "tiredness and restlessness."
+        ),
+    },
+    {
+        "topic": "Malaria",
+        "source_name": "WHO",
+        "keywords": ["malaria", "artemisinin", "rdt", "parasite", "plasmodium", "mosquito"],
+        "reference": "Public guidance summary (WHO-style) — educational, simplified",
+        "text": (
+            "Malaria should be confirmed by a blood test (microscopy or a rapid diagnostic test) "
+            "before starting treatment. Uncomplicated malaria is treated with artemisinin-based "
+            "combination therapy (ACT). Severe malaria is a medical emergency treated with "
+            "injectable artesunate in hospital. Prevention relies on avoiding mosquito bites, "
+            "especially sleeping under insecticide-treated bed nets."
+        ),
+    },
+    {
+        "topic": "Tuberculosis (TB)",
+        "source_name": "WHO",
+        "keywords": ["tuberculosis", "tb", "cough", "sputum", "isoniazid", "rifampicin", "mdr", "lung"],
+        "reference": "Public guidance summary (WHO-style) — educational, simplified",
+        "text": (
+            "Active tuberculosis is treated with a combination of antibiotics for at least 6 months — "
+            "commonly isoniazid, rifampicin, pyrazinamide, and ethambutol for 2 months, then "
+            "isoniazid and rifampicin for 4 months. The full course must be completed exactly as "
+            "prescribed; stopping early can cause relapse and drug-resistant TB. A cough lasting "
+            "more than 2 weeks, or coughing up blood, should be tested for TB."
+        ),
+    },
+    {
+        "topic": "HIV treatment and prevention",
+        "source_name": "WHO",
+        "keywords": ["hiv", "aids", "antiretroviral", "art", "undetectable", "prep", "virus"],
+        "reference": "Public guidance summary (WHO-style) — educational, simplified",
+        "text": (
+            "HIV is diagnosed with a blood test. There is no cure, but lifelong antiretroviral "
+            "therapy (ART) — a daily combination of medicines — controls the virus and lets people "
+            "live long, healthy lives. People taking effective ART who reach an undetectable viral "
+            "load do not pass HIV on through sex. Condoms and pre-exposure prophylaxis (PrEP) "
+            "prevent sexual transmission."
+        ),
+    },
+    {
+        "topic": "Healthy pregnancy basics",
+        "source_name": "WHO",
+        "keywords": ["pregnancy", "pregnant", "folic", "vitamin", "antenatal", "breastfeeding", "trimester", "baby", "conceive", "miscarriage"],
+        "reference": "Public guidance summary (WHO-style) — educational, simplified",
+        "text": (
+            "Women planning pregnancy should take a daily folic acid supplement (400 micrograms) "
+            "before conception and during the first 12 weeks to prevent neural tube defects. WHO "
+            "recommends at least 8 antenatal care visits during pregnancy. Alcohol and smoking harm "
+            "the unborn baby and should be avoided completely. Exclusive breastfeeding is "
+            "recommended for the first 6 months."
+        ),
+    },
+    {
+        "topic": "Antibiotic stewardship",
+        "source_name": "WHO",
+        "keywords": ["stewardship", "resistance", "resistant", "course", "leftover", "prescribed", "finish", "skip", "dose"],
+        "reference": "Public guidance summary (WHO-style) — educational, simplified",
+        "text": (
+            "Antibiotics must be taken exactly as prescribed, and the full course must be completed "
+            "even if you feel better. Never take leftover antibiotics or antibiotics prescribed for "
+            "someone else. Misuse of antibiotics — taking them when not needed, skipping doses, or "
+            "stopping early — drives antimicrobial resistance, which makes infections harder to "
+            "treat in everyone."
+        ),
+    },
+    {
+        "topic": "High cholesterol",
+        "source_name": "NICE",
+        "keywords": ["cholesterol", "statin", "atorvastatin", "ldl", "lipid", "cardiovascular"],
+        "reference": "Public guidance summary (NICE-style) — educational, simplified",
+        "text": (
+            "High cholesterol is treated first with lifestyle changes — reducing saturated fat, "
+            "eating more fibre, exercising regularly, and stopping smoking. For people at high "
+            "cardiovascular risk, statins such as atorvastatin are the first-line medicines to "
+            "lower LDL cholesterol. Statins are usually taken for life; severe muscle pain while "
+            "on a statin should be reported to a doctor."
+        ),
+    },
+    {
+        "topic": "Depression treatment",
+        "source_name": "NICE",
+        "keywords": ["depression", "depressed", "antidepressant", "ssri", "mental", "mood", "sad"],
+        "reference": "Public guidance summary (NICE-style) — educational, simplified",
+        "text": (
+            "For mild depression, the first treatments are guided self-help, regular exercise, and "
+            "talking therapies such as cognitive behavioural therapy (CBT). For moderate to severe "
+            "depression, antidepressant medicines (SSRIs) may be prescribed. Antidepressants take "
+            "2 to 4 weeks to start working, should be taken every day, and must never be stopped "
+            "suddenly."
+        ),
+    },
+    {
+        "topic": "Low blood sugar (hypoglycaemia)",
+        "source_name": "NICE / ADA",
+        "keywords": ["hypoglycemia", "hypoglycaemia", "low blood sugar", "insulin", "glucose", "shaking", "diabetic emergency"],
+        "reference": "Public guidance summary (NICE/ADA-style) — educational, simplified",
+        "text": (
+            "Low blood sugar (sweating, shaking, confusion, feeling faint) in a person with diabetes "
+            "is treated immediately with 15–20 g of fast-acting sugar — glucose tablets or a small "
+            "glass of juice — then rechecked after 15 minutes. If the person becomes unconscious, "
+            "nothing must be given by mouth; call emergency services immediately."
+        ),
+    },
+    {
+        "topic": "Heart attack first aid",
+        "source_name": "NHS / AHA-style",
+        "keywords": ["heart attack", "chest pain", "cardiac", "aspirin", "emergency", "heart"],
+        "reference": "Public guidance summary (NHS/AHA-style) — educational, simplified",
+        "text": (
+            "A suspected heart attack — chest pain or pressure, possibly spreading to the arm, "
+            "neck, or jaw, with sweating, nausea, or shortness of breath — is a medical emergency: "
+            "call emergency services immediately. While waiting, the person should sit down and "
+            "rest. Chewing a single 300 mg aspirin is recommended unless the person is allergic "
+            "to aspirin or has been told not to take it."
         ),
     },
 ]
@@ -198,8 +342,11 @@ def match_source(question: str, min_score: int = 2) -> tuple[dict | None, int]:
     """Return (best_library_entry, score) for a question, or (None, 0) if nothing
     clears the threshold.
 
-    Score = word overlap between question and chunk (stemmed, stopwords removed)
-           + 2 points per keyword hit (keywords capture how real users phrase a topic).
+    Scoring (tuned to avoid topic confusion):
+      + 1  per content word shared with the topic/chunk text (stemmed, stopwords removed)
+      + 2  per single-word keyword hit (how real users phrase a topic)
+      + 4  per multi-word phrase keyword hit (e.g. "chest pain", "penicillin allergy") —
+           these are the most distinctive signals, so they dominate generic word overlap.
     """
     q_lower = question.lower()
     q_words = _words(question)
@@ -212,7 +359,7 @@ def match_source(question: str, min_score: int = 2) -> tuple[dict | None, int]:
         for kw in entry.get("keywords", []):
             if " " in kw:
                 if kw in q_lower:
-                    score += 2
+                    score += 4
             elif _stem(kw) in q_words:
                 score += 2
         if score > best_score:

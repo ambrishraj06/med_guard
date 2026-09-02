@@ -225,11 +225,12 @@ def render_claims(claims: list[dict]) -> None:
         )
 
 
-def render_source_panel(source: str, claims: list[dict]) -> None:
+def render_source_panel(source: str, claims: list[dict], source_name: str | None = None) -> None:
     """Side-by-side: what the answer got wrong vs the guideline's own words."""
     failed = [c for c in claims if c["status"] in ("UNSUPPORTED", "CONTRADICTION")]
     st.markdown("### The answer vs the guideline, side by side")
-    st.caption("Real guideline text only — MedGuard shows evidence, it never writes its own medical advice.")
+    attribution = f" — Source: {source_name}" if source_name else ""
+    st.caption(f"Real guideline text only{attribution}. MedGuard shows evidence, it never writes its own medical advice.")
     if not source.strip():
         st.markdown('<div class="mg-card">No guideline was provided.</div>', unsafe_allow_html=True)
         return
@@ -249,7 +250,7 @@ def render_source_panel(source: str, claims: list[dict]) -> None:
             <div class="c-text">{c["claim"]}</div>
           </div>
           <div>
-            <div class="head sourced">WHAT THE GUIDELINE SAYS</div>
+            <div class="head sourced">WHAT THE GUIDELINE SAYS{f" ({source_name})" if source_name else ""}</div>
             <div class="mg-quote">“{quote}”</div>
           </div>
         </div>"""
@@ -389,6 +390,33 @@ TEST_CASES = {
             "Amoxicillin is safe in pregnancy. Paracetamol is the preferred analgesic when pain relief is needed."
         ),
     },
+    "T9 · 🔴 Dengue: wrong painkiller (WHO guidance)": {
+        "q": "I have dengue fever with body aches. What painkiller should I take?",
+        "s": (
+            "Dengue is a mosquito-borne viral infection. Treatment is supportive — rest, fluids, "
+            "and paracetamol for fever and pain. NSAIDs such as aspirin or ibuprofen must be "
+            "avoided because they increase the risk of bleeding."
+        ),
+        "a": "Ibuprofen 400 mg three times a day is effective for dengue fever aches.",
+    },
+    "T10 · 🟢 Dengue answered correctly": {
+        "q": "I have dengue fever with body aches. What painkiller should I take?",
+        "s": (
+            "Dengue is a mosquito-borne viral infection. Treatment is supportive — rest, fluids, "
+            "and paracetamol for fever and pain. NSAIDs such as aspirin or ibuprofen must be "
+            "avoided because they increase the risk of bleeding."
+        ),
+        "a": "Take paracetamol for the fever and aches, rest, and drink plenty of fluids. Avoid aspirin and ibuprofen as they increase bleeding risk.",
+    },
+    "T11 · 🔴 Warfarin interaction (holistic catch)": {
+        "q": "I take warfarin for my heart. I have a bad thrush infection — what medicine should I use?",
+        "s": (
+            "Fluconazole is an effective treatment for thrush. However, fluconazole must not be "
+            "combined with warfarin — the combination causes a severe bleeding risk and is "
+            "contraindicated. Miconazole gel is a safer alternative for patients taking warfarin."
+        ),
+        "a": "Fluconazole is a good option for treating your thrush.",
+    },
 }
 
 preset = st.selectbox(
@@ -454,6 +482,7 @@ if run_clicked:
         st.stop()
 
     # --- Auto-pick the guideline from the built-in library if none provided ---
+    used_source_name = None
     if not source.strip():
         match, score = match_source(question)
         if match is None:
@@ -466,7 +495,12 @@ if run_clicked:
             render_verdict(verdict_preview["verdict"], verdict_preview["coverage"], verdict_preview["reason"])
             st.stop()
         source = match["text"]
-        st.info(f"📖 No guideline was pasted, so we used our built-in guideline on: **{match['topic']}**")
+        used_source_name = match.get("source_name", "our built-in guideline library")
+        st.info(
+            f"📖 No guideline was pasted, so we used our built-in guideline on "
+            f"**{match['topic']}** — *Source: {used_source_name}* "
+            f"(a simplified public-health summary, not a verbatim official document)"
+        )
 
     # --- Generate an answer if none provided (Ask & Check mode) ---------------
     if not answer.strip():
@@ -495,11 +529,18 @@ if run_clicked:
     render_verdict(result["verdict"], result["coverage"], result["reason"])
     st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
 
+    if used_source_name:
+        st.markdown(
+            f'<div class="mg-card" style="padding:10px 16px;">📚 '
+            f'Guideline used for this check: <b>{used_source_name}</b> — {match["topic"]}</div>',
+            unsafe_allow_html=True,
+        )
+
     left, right = st.columns([1.25, 1])
     with left:
         render_claims(result["claims"])
     with right:
-        render_source_panel(result["source"], result["claims"])
+        render_source_panel(result["source"], result["claims"], source_name=used_source_name)
 
     if result.get("crosscheck_score") is not None:
         pct = max(0.0, min(1.0, float(result["crosscheck_score"]))) * 100
