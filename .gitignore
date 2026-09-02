@@ -29,3 +29,4 @@ Thumbs.db
 # --- Streamlit ---
 .streamlit/secrets.toml
 .streamlit_test.log
+.streamlit_test*.log
