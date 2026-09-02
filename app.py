@@ -17,15 +17,24 @@ Run:  streamlit run app.py
 
 import json
 import sys
+import traceback
 from pathlib import Path
 
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from medguard.audit import DEFAULT_JUDGE_MODEL, generate_answer, run_audit  # noqa: E402
-from medguard.crosscheck import available_checkers  # noqa: E402
-from medguard.library import match_source  # noqa: E402
+# Diagnostic trap: show the REAL import error on the page instead of
+# Streamlit's redacted "ImportError" card, so failures are debuggable in prod.
+try:
+    from medguard.audit import DEFAULT_JUDGE_MODEL, generate_answer, run_audit  # noqa: E402
+    from medguard.crosscheck import available_checkers  # noqa: E402
+    from medguard.library import match_source  # noqa: E402
+except Exception:
+    st.set_page_config(page_title="MedGuard — startup error", page_icon="🛡️", layout="wide")
+    st.error("MedGuard failed to import its engine. Real error below:")
+    st.code(traceback.format_exc(), language="python")
+    st.stop()
 
 # ---------------------------------------------------------------------------
 # Page + golden case
