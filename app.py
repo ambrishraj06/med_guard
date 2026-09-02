@@ -64,10 +64,10 @@ GOLDEN = {
 }
 
 VERDICT_STYLES = {
-    "BLOCKED": ("#FF4757", "🚫", "NO — DON'T TRUST IT", "This answer goes against the medical guideline. Following it could be dangerous."),
-    "SAFE": ("#2ED573", "✅", "YES — YOU CAN TRUST IT", "This answer matches the medical guideline."),
-    "WARNING": ("#FFA502", "⚠️", "PARTLY — BE CAREFUL", "Some parts are fine, but the flagged parts below are NOT from the guideline."),
-    "UNVERIFIABLE": ("#747D8C", "❔", "CAN'T CHECK", "We couldn't find a guideline for this. Paste a source (or try a common topic) and check again."),
+    "BLOCKED": ("#FF4757", "🚫", "AUDIT FAILED — DON'T TRUST IT", "This answer goes against the medical guideline. Following it could be dangerous."),
+    "SAFE": ("#2ED573", "✅", "AUDIT PASSED — TRUSTED", "This answer matches the medical guideline."),
+    "WARNING": ("#FFA502", "⚠️", "AUDIT FLAGGED — PARTLY TRUSTED", "Some parts are fine, but the flagged parts below are NOT from the guideline."),
+    "UNVERIFIABLE": ("#747D8C", "❔", "CAN'T AUDIT — NO GUIDELINE FOUND", "We couldn't find a guideline for this. Paste a source (or try a common topic) and audit again."),
 }
 
 CHIP_STYLES = {
@@ -175,7 +175,7 @@ def render_header() -> None:
         <div class="mg-header">
           <div>
             <div class="mg-logo"><span class="shield">🛡️</span> MedGuard</div>
-            <div class="mg-tag">I don't audit models — I audit outputs.</div>
+            <div class="mg-tag">AI answers in. <b>Audit reports</b> out. Every medical claim checked against official guidelines.</div>
           </div>
         </div>
         <div class="mg-rule"></div>
@@ -211,7 +211,7 @@ def render_verdict(verdict: str, coverage: int, reason: str) -> None:
 
 def render_claims(claims: list[dict]) -> None:
     """One card per claim, in ordinary words: what the answer said + plain verdict."""
-    st.markdown("### What the answer said — checked one point at a time")
+    st.markdown("### Audit findings — every claim in the answer, checked")
     if not claims:
         st.markdown('<div class="mg-card">Nothing to check in this answer.</div>', unsafe_allow_html=True)
         return
@@ -368,7 +368,7 @@ with st.sidebar:
 
             1. Type the **question** someone asked the AI
             2. Paste the **AI's answer** you want checked
-            3. Hit **“Can we trust this answer?”**
+            3. Hit **“Audit this answer”**
 
             **About the guideline (source) box:**
             - Paste the official guideline for the most accurate check, **or**
@@ -477,7 +477,7 @@ if not source.strip():
     )
 
 run_clicked = st.button(
-    "🛡️  Can we trust this answer?",
+    "🛡️  Audit this answer",
     use_container_width=True,
     type="primary",
 )
@@ -487,7 +487,7 @@ run_clicked = st.button(
 # ---------------------------------------------------------------------------
 if run_clicked:
     if not question.strip() or not answer.strip():
-        st.warning("Type the question and paste the AI answer you want checked.")
+        st.warning("Type the question and paste the AI answer you want audited.")
         st.stop()
 
     # --- Auto-pick the guideline from the built-in library if none provided ---
@@ -497,7 +497,7 @@ if run_clicked:
         if match is None:
             st.warning(
                 "We couldn't find a guideline for this topic in our built-in library, "
-                "so we can't honestly check this answer — guessing would be dangerous. "
+                "so we can't honestly audit this answer — guessing would be dangerous. "
                 "Paste the official guideline text in the 📖 box and try again."
             )
             verdict_preview = compute_unverifiable()
@@ -511,7 +511,7 @@ if run_clicked:
             f"(a simplified public-health summary, not a verbatim official document)"
         )
 
-    with st.spinner("Checking the answer against the guideline…"):
+    with st.spinner("Auditing the answer against the guideline…"):
         try:
             result = run_audit(
                 question=question,
@@ -521,7 +521,7 @@ if run_clicked:
                 api_key=manual_key or None,
             )
         except Exception as err:
-            st.error(f"Check failed: {err}")
+            st.error(f"Audit failed: {err}")
             st.stop()
 
     render_verdict(result["verdict"], result["coverage"], result["reason"])
