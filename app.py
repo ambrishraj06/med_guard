@@ -54,10 +54,10 @@ GOLDEN = {
 }
 
 VERDICT_STYLES = {
-    "BLOCKED": ("#FF4757", "🚫", "BLOCKED"),
-    "SAFE": ("#2ED573", "✅", "SAFE"),
-    "WARNING": ("#FFA502", "⚠️", "WARNING"),
-    "UNVERIFIABLE": ("#747D8C", "❔", "UNVERIFIABLE"),
+    "BLOCKED": ("#FF4757", "🚫", "BLOCKED", "❌ Do not trust this answer — it goes against the guideline."),
+    "SAFE": ("#2ED573", "✅", "SAFE", "✅ This answer matches the guideline. Safe to rely on it (for this question)."),
+    "WARNING": ("#FFA502", "⚠️", "WARNING", "⚠️ Partly trustworthy — the flagged parts below are NOT backed by the guideline."),
+    "UNVERIFIABLE": ("#747D8C", "❔", "CAN'T CHECK", "❔ We can't judge this without the guideline text. Provide it and try again."),
 }
 
 CHIP_STYLES = {
@@ -164,17 +164,18 @@ def render_header() -> None:
 
 
 def render_verdict(verdict: str, coverage: int, reason: str) -> None:
-    color, icon, label = VERDICT_STYLES.get(verdict, VERDICT_STYLES["UNVERIFIABLE"])
+    color, icon, label, advice = VERDICT_STYLES.get(verdict, VERDICT_STYLES["UNVERIFIABLE"])
     pulse = "mg-pulse" if verdict == "BLOCKED" else ""
     st.markdown(
         f"""
         <div class="mg-verdict">
           <div class="v-glow {pulse}" style="background:{color};"></div>
           <div class="v-label" style="color:{color};">{icon} {label}</div>
-          <div class="v-sub">{reason}</div>
+          <div class="v-sub" style="color:{color}; font-weight:600;">{advice}</div>
           <div class="mg-meter"><div style="width:{coverage}%;"></div></div>
-          <div class="v-sub" style="margin-top:6px;">Evidence coverage: <b style="color:#E2E8F0;">{coverage}%</b>
-          &nbsp;·&nbsp; this measures how much of the answer is backed by the source — it is not a calibrated confidence score.</div>
+          <div class="v-sub" style="margin-top:6px;">Safety score: <b style="color:#E2E8F0;">{coverage}%</b>
+          — how much of the answer is backed by the guideline.</div>
+          <div class="c-why" style="margin-top:4px;">{reason}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -262,43 +263,45 @@ def _best_matching_sentence(source: str, claim: str) -> str | None:
 checkers = available_checkers()
 
 with st.sidebar:
-    st.markdown("## ⚙️ Configuration")
+    st.markdown("## 🛡️ MedGuard")
+    st.caption("Checks AI health answers against official guidelines — so lies don't slip through.")
 
-    key_status = "🟢 key loaded from secrets/env"
-    try:
-        import streamlit as st_secret_check  # noqa: PLC0415
+    with st.expander("⚙️ Advanced settings (for engineers)"):
+        key_status = "🟢 key loaded from secrets/env"
+        try:
+            import streamlit as st_secret_check  # noqa: PLC0415
 
-        _ = st_secret_check.secrets["GROQ_API_KEY"]
-    except Exception:
-        key_status = (
-            "🟡 no key found — paste one below "
-            "(get a free key at console.groq.com/keys)"
+            _ = st_secret_check.secrets["GROQ_API_KEY"]
+        except Exception:
+            key_status = (
+                "🟡 no key found — paste one below "
+                "(get a free key at console.groq.com/keys)"
+            )
+        st.markdown(f"**Groq API key**  \n{key_status}")
+        manual_key = st.text_input(
+            "Bring your own key (BYO)",
+            type="password",
+            help="Stored in memory for this session only — never written to disk.",
         )
-    st.markdown(f"**Groq API key**  \n{key_status}")
-    manual_key = st.text_input(
-        "Bring your own key (BYO)",
-        type="password",
-        help="Stored in memory for this session only — never written to disk.",
-    )
 
-    st.divider()
-    st.markdown("**Judge model**")
-    st.code(DEFAULT_JUDGE_MODEL, language=None)
-    st.caption("Model name is config, not hardcoded logic — Groq deprecates models.")
+        st.divider()
+        st.markdown("**Judge model**")
+        st.code(DEFAULT_JUDGE_MODEL, language=None)
+        st.caption("Model name is config, not hardcoded logic — Groq deprecates models.")
 
-    st.divider()
-    st.markdown("**Independent cross-checker**")
-    checker_options = [
-        "none",
-        "hhem" if checkers["hhem"] else "hhem (unavailable — install torch+transformers)",
-        "minicheck" if checkers["minicheck"] else "minicheck (unavailable — pip install minicheck)",
-    ]
-    checker = st.selectbox("Second opinion", checker_options, index=0)
-    checker_clean = checker.split(" (")[0]
-    st.caption(
-        "HHEM / MiniCheck are small non-LLM models that independently score whether "
-        "the answer is supported by the source. Loads only the selected model."
-    )
+        st.divider()
+        st.markdown("**Independent cross-checker**")
+        checker_options = [
+            "none",
+            "hhem" if checkers["hhem"] else "hhem (unavailable — install torch+transformers)",
+            "minicheck" if checkers["minicheck"] else "minicheck (unavailable — pip install minicheck)",
+        ]
+        checker = st.selectbox("Second opinion", checker_options, index=0)
+        checker_clean = checker.split(" (")[0]
+        st.caption(
+            "HHEM / MiniCheck are small non-LLM models that independently score whether "
+            "the answer is supported by the source. Loads only the selected model."
+        )
 
 # ---------------------------------------------------------------------------
 # Main inputs — with a built-in test-case library (one click fills all boxes)
@@ -375,7 +378,7 @@ TEST_CASES = {
 }
 
 preset = st.selectbox(
-    "📚 Test-case library — pick one, boxes fill themselves",
+    "🧪 Want to try an example? Pick one — we fill everything for you",
     list(TEST_CASES.keys()),
 )
 
@@ -388,26 +391,26 @@ elif TEST_CASES[preset] is None:
     st.session_state["_loaded_preset"] = preset
 
 question = st.text_area(
-    "1 · Clinical question",
+    "❓ The question someone asked the AI",
     value=st.session_state.get("mg_question", GOLDEN["question"]),
     key="mg_question",
     height=68,
 )
 source = st.text_area(
-    "2 · Guideline source text (the measuring stick)",
+    "📖 The guideline (what the answer SHOULD say)",
     value=st.session_state.get("mg_source", GOLDEN["source"]),
     key="mg_source",
     height=110,
 )
 answer = st.text_area(
-    "3 · AI answer to audit",
+    "🤖 The AI answer to check",
     value=st.session_state.get("mg_answer", GOLDEN["bad_answer"]),
     key="mg_answer",
     height=110,
 )
 
 run_clicked = st.button(
-    "🛡️  Run MedGuard Audit",
+    "🛡️  Check this answer",
     use_container_width=True,
     type="primary",
 )
