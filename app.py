@@ -406,25 +406,33 @@ if TEST_CASES[preset] is not None and st.session_state.get("_loaded_preset") != 
     st.session_state["mg_question"] = TEST_CASES[preset]["q"]
     st.session_state["mg_source"] = TEST_CASES[preset]["s"]
     st.session_state["mg_answer"] = TEST_CASES[preset]["a"]
+    st.rerun()  # apply preset values through the canonical state path
 elif TEST_CASES[preset] is None:
     st.session_state["_loaded_preset"] = preset
 
+# Canonical Streamlit pattern: set widget defaults ONCE in session_state,
+# then create widgets with key= only. Passing value= together with key= is the
+# known anti-pattern that reverts user edits on rerun.
+if "mg_question" not in st.session_state:
+    st.session_state["mg_question"] = GOLDEN["question"]
+if "mg_source" not in st.session_state:
+    st.session_state["mg_source"] = GOLDEN["source"]
+if "mg_answer" not in st.session_state:
+    st.session_state["mg_answer"] = GOLDEN["bad_answer"]
+
 question = st.text_area(
     "❓ Your question",
-    value=st.session_state.get("mg_question", GOLDEN["question"]),
     key="mg_question",
     height=68,
 )
 source = st.text_area(
     "📖 The guideline — leave empty and we auto-pick it from our library",
-    value=st.session_state.get("mg_source", GOLDEN["source"]),
     key="mg_source",
     height=110,
     help="If you leave this empty, MedGuard matches your question against its built-in library of public-guideline topics.",
 )
 answer = st.text_area(
     "🤖 The AI answer to check — leave empty and we'll write one from the guideline",
-    value=st.session_state.get("mg_answer", GOLDEN["bad_answer"]),
     key="mg_answer",
     height=110,
     help="Auditing someone else's chatbot? Paste its answer here. Just asking for yourself? Leave it empty and MedGuard generates + checks one for you.",
