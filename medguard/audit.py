@@ -167,10 +167,12 @@ def extract_claims(
     *,
     model: str = DEFAULT_JUDGE_MODEL,
     api_key: str | None = None,
+    question: str = "",
 ) -> list[dict]:
-    """Split an AI answer into atomic claims: [{"claim_id": int, "claim": str}]."""
+    """Split an AI answer into atomic claims (explicit + implicit safety claims),
+    aware of the patient's question. Returns [{"claim_id": int, "claim": str}]."""
     client = _get_client(api_key)
-    messages = prompts.build_extraction_messages(answer)
+    messages = prompts.build_extraction_messages(answer, question)
     data = _chat_json(client, model, messages)
 
     raw_claims = data.get("claims", [])
@@ -217,7 +219,7 @@ def verify_claims(
         return []
 
     client = _get_client(api_key)
-    messages = prompts.build_verification_messages(source, claims)
+    messages = prompts.build_verification_messages(question, source, claims)
     data = _chat_json(client, model, messages)
 
     raw_results = data.get("results", data.get("claims", []))
@@ -343,6 +345,47 @@ def generate_answer(
 
 
 # ---------------------------------------------------------------------------
+# Final holistic safety review (whole answer, patient context) — Upgrade 3
+# ---------------------------------------------------------------------------
+def holistic_check(
+    question: str,
+    source: str,
+    answer: str,
+    *,
+    model: str = DEFAULT_JUDGE_MODEL,
+    api_key: str | None = None,
+) -> dict:
+    """One last whole-answer review in the patient's context.
+    Returns {"status": "OK"|"CONTRADICTION", "reasoning": str, "evidence": quote|None}.
+    Never raises — on any failure it returns OK with a note (audit still stands
+    on its claim-level results)."""
+    try:
+        client = _get_client(api_key)
+        messages = prompts.build_holistic_messages(question, source, answer)
+        data = _chat_json(client, model, messages)
+        status = normalize_status(data.get("status"))
+        if status not in ("SUPPORTED", "CONTRADICTION"):
+            status = "SUPPORTED"  # unknown/unparseable -> neutral, never fabricate danger
+        reasoning = str(data.get("reasoning", "")).strip()
+        evidence = data.get("evidence")
+        if not isinstance(evidence, str) or not evidence.strip():
+            evidence = None
+        if evidence and evidence.strip() not in source:
+            evidence = None
+        return {
+            "status": "CONTRADICTION" if status == "CONTRADICTION" else "OK",
+            "reasoning": reasoning,
+            "evidence": evidence,
+        }
+    except Exception as err:
+        return {
+            "status": "OK",
+            "reasoning": f"(holistic check skipped: {err})",
+            "evidence": None,
+        }
+
+
+# ---------------------------------------------------------------------------
 # Full pipeline — one function the UI calls
 # ---------------------------------------------------------------------------
 def run_audit(
@@ -366,14 +409,28 @@ def run_audit(
         verdict = compute_verdict(None, has_answer=False)
         return _assemble(question, source, answer, [], None, verdict)
 
-    claims = extract_claims(answer, model=model, api_key=api_key)
+    claims = extract_claims(answer, model=model, api_key=api_key, question=question)
     if not claims:
         verdict = compute_verdict([], has_answer=True)
         return _assemble(question, source, answer, [], None, verdict)
 
     verified = verify_claims(claims, source, question, model=model, api_key=api_key)
     statuses = [v["status"] for v in verified]
+
+    # Final holistic safety review in the patient's context (Upgrade 3).
+    # A CONTRADICTION here promotes the verdict to BLOCKED — this is what
+    # catches e.g. drug-interaction dangers the claim loop can miss.
+    holistic = holistic_check(question, source, answer, model=model, api_key=api_key)
+    if holistic["status"] == "CONTRADICTION":
+        statuses = statuses + ["CONTRADICTION"]
+
     verdict = compute_verdict(statuses)
+    if holistic["status"] == "CONTRADICTION" and verdict["verdict"] != "BLOCKED":
+        verdict = dict(verdict, verdict="BLOCKED", coverage=0)
+    if holistic["status"] == "CONTRADICTION":
+        base_reason = verdict.get("reason", "")
+        plain = holistic.get("reasoning") or "the answer gives dangerous guidance for this patient"
+        verdict = dict(verdict, reason=f"{plain} ({base_reason})" if base_reason else plain)
 
     crosscheck: tuple[str, float | None] | None = None
     if crosschecker and crosschecker.lower() != "none":

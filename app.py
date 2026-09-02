@@ -64,16 +64,16 @@ GOLDEN = {
 }
 
 VERDICT_STYLES = {
-    "BLOCKED": ("#FF4757", "🚫", "BLOCKED", "❌ Do not trust this answer — it goes against the guideline."),
-    "SAFE": ("#2ED573", "✅", "SAFE", "✅ This answer matches the guideline. Safe to rely on it (for this question)."),
-    "WARNING": ("#FFA502", "⚠️", "WARNING", "⚠️ Partly trustworthy — the flagged parts below are NOT backed by the guideline."),
-    "UNVERIFIABLE": ("#747D8C", "❔", "CAN'T CHECK", "❔ We can't judge this without the guideline text. Provide it and try again."),
+    "BLOCKED": ("#FF4757", "🚫", "NO — DON'T TRUST IT", "This answer goes against the medical guideline. Following it could be dangerous."),
+    "SAFE": ("#2ED573", "✅", "YES — YOU CAN TRUST IT", "This answer matches the medical guideline."),
+    "WARNING": ("#FFA502", "⚠️", "PARTLY — BE CAREFUL", "Some parts are fine, but the flagged parts below are NOT from the guideline."),
+    "UNVERIFIABLE": ("#747D8C", "❔", "CAN'T CHECK", "We couldn't find a guideline for this. Paste a source (or try a common topic) and check again."),
 }
 
 CHIP_STYLES = {
-    "SUPPORTED": ("#2ED573", "✅"),
-    "UNSUPPORTED": ("#FFA502", "❔"),
-    "CONTRADICTION": ("#FF4757", "🚫"),
+    "SUPPORTED": ("#2ED573", "✅", "BACKED BY THE GUIDELINE"),
+    "UNSUPPORTED": ("#FFA502", "❔", "NOT IN THE GUIDELINE"),
+    "CONTRADICTION": ("#FF4757", "🚫", "GOES AGAINST THE GUIDELINE"),
 }
 
 # ---------------------------------------------------------------------------
@@ -191,10 +191,7 @@ def render_verdict(verdict: str, coverage: int, reason: str) -> None:
           <div class="v-glow {pulse}" style="background:{color};"></div>
           <div class="v-label" style="color:{color};">{icon} {label}</div>
           <div class="v-sub" style="color:{color}; font-weight:600;">{advice}</div>
-          <div class="mg-meter"><div style="width:{coverage}%;"></div></div>
-          <div class="v-sub" style="margin-top:6px;">Safety score: <b style="color:#E2E8F0;">{coverage}%</b>
-          — how much of the answer is backed by the guideline.</div>
-          <div class="c-why" style="margin-top:4px;">{reason}</div>
+          <div class="v-sub" style="margin-top:10px;">{reason}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -202,23 +199,25 @@ def render_verdict(verdict: str, coverage: int, reason: str) -> None:
 
 
 def render_claims(claims: list[dict]) -> None:
-    st.markdown("### Claim-by-claim audit")
+    """One card per claim, in ordinary words: what the answer said + plain verdict."""
+    st.markdown("### What the answer said — checked one point at a time")
     if not claims:
-        st.markdown('<div class="mg-card">No claims to display.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="mg-card">Nothing to check in this answer.</div>', unsafe_allow_html=True)
         return
     for c in claims:
-        color, icon = CHIP_STYLES.get(c["status"], CHIP_STYLES["UNSUPPORTED"])
+        color, icon, label = CHIP_STYLES.get(c["status"], CHIP_STYLES["UNSUPPORTED"])
         evidence_html = ""
         if c.get("evidence"):
             evidence_html = (
-                f'<div class="mg-quote" style="margin-top:8px;">“{c["evidence"]}”</div>'
+                f'<div class="mg-quote" style="margin-top:8px;"><b>From the guideline:</b> “{c["evidence"]}”</div>'
             )
+        why = c.get("reasoning") or ""
         st.markdown(
             f"""
             <div class="mg-claim">
-              <span class="mg-chip" style="background:{color};">{icon} {c["status"]}</span>
-              <div class="c-text" style="margin-top:7px;">{c["claim"]}</div>
-              <div class="c-why">{c.get("reasoning") or ""}</div>
+              <span class="mg-chip" style="background:{color};">{icon} {label}</span>
+              <div class="c-text" style="margin-top:7px;">“{c["claim"]}”</div>
+              <div class="c-why">{why}</div>
               {evidence_html}
             </div>
             """,
@@ -227,34 +226,30 @@ def render_claims(claims: list[dict]) -> None:
 
 
 def render_source_panel(source: str, claims: list[dict]) -> None:
-    """'What the source says' — verbatim quotes only (decision D18).
-    For every failed claim we show the exact guideline sentence it failed against."""
+    """Side-by-side: what the answer got wrong vs the guideline's own words."""
     failed = [c for c in claims if c["status"] in ("UNSUPPORTED", "CONTRADICTION")]
-    st.markdown("### What the source says")
-    st.caption(
-        "Verbatim guideline text only — MedGuard presents evidence, never generated medical advice."
-    )
+    st.markdown("### The answer vs the guideline, side by side")
+    st.caption("Real guideline text only — MedGuard shows evidence, it never writes its own medical advice.")
     if not source.strip():
-        st.markdown('<div class="mg-card">No source was provided.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="mg-card">No guideline was provided.</div>', unsafe_allow_html=True)
         return
     if not failed:
         st.markdown(
-            '<div class="mg-card">Every claim in the answer traces back to the source. '
-            "The full source text is shown in the expander below.</div>",
+            '<div class="mg-card">✅ Everything in the answer traces back to the guideline.</div>',
             unsafe_allow_html=True,
         )
         return
     rows = ""
     for c in failed:
-        quote = c.get("evidence") or _best_matching_sentence(source, c["claim"]) or "(no matching sentence in source — this claim has no grounding in the guideline text)"
+        quote = c.get("evidence") or _best_matching_sentence(source, c["claim"]) or "(nothing in the guideline talks about this — the answer made it up or brought it in from outside)"
         rows += f"""
         <div class="mg-duo mg-claim" style="border-left-color:{VERDICT_STYLES['BLOCKED'][0] if c['status']=='CONTRADICTION' else VERDICT_STYLES['WARNING'][0]};">
           <div>
-            <div class="head claimed">THE ANSWER CLAIMED</div>
+            <div class="head claimed">WHAT THE ANSWER SAID</div>
             <div class="c-text">{c["claim"]}</div>
           </div>
           <div>
-            <div class="head sourced">THE SOURCE SAYS (verbatim)</div>
+            <div class="head sourced">WHAT THE GUIDELINE SAYS</div>
             <div class="mg-quote">“{quote}”</div>
           </div>
         </div>"""
@@ -426,20 +421,26 @@ question = st.text_area(
     height=68,
 )
 source = st.text_area(
-    "📖 The guideline — leave empty and we auto-pick it from our library",
+    "📖 Guideline text (optional)",
     key="mg_source",
     height=110,
-    help="If you leave this empty, MedGuard matches your question against its built-in library of public-guideline topics.",
+    help="Paste the official guideline here for the most accurate check. If you leave it empty, we'll try to find a matching topic in our built-in medical guideline library.",
 )
 answer = st.text_area(
-    "🤖 The AI answer to check — leave empty and we'll write one from the guideline",
+    "🤖 The AI answer you want checked (optional)",
     key="mg_answer",
     height=110,
-    help="Auditing someone else's chatbot? Paste its answer here. Just asking for yourself? Leave it empty and MedGuard generates + checks one for you.",
+    help="Paste the AI's answer here to check it. Leave it empty and we'll write an answer from the guideline, then check that one.",
 )
 
+if not source.strip():
+    st.caption(
+        "💡 Tip: paste the official guideline for better accuracy — otherwise we'll "
+        "auto-pick one from our built-in medical guideline library."
+    )
+
 run_clicked = st.button(
-    "🛡️  Check this answer",
+    "🛡️  Can we trust this answer?",
     use_container_width=True,
     type="primary",
 )
@@ -457,29 +458,28 @@ if run_clicked:
         match, score = match_source(question)
         if match is None:
             st.warning(
-                "No guideline topic in our built-in library matched this question. "
-                "MedGuard refuses to judge without evidence — that's the abstention safety feature. "
-                "To audit properly, paste a guideline into the guideline box and run again."
+                "We couldn't find a guideline for this topic in our built-in library, "
+                "so we can't honestly check this answer — guessing would be dangerous. "
+                "Paste the official guideline text in the 📖 box and try again."
             )
             verdict_preview = compute_unverifiable()
             render_verdict(verdict_preview["verdict"], verdict_preview["coverage"], verdict_preview["reason"])
             st.stop()
         source = match["text"]
-        st.info(f"📖 Auto-matched guideline topic: **{match['topic']}**  ·  _{match['reference']}_")
+        st.info(f"📖 No guideline was pasted, so we used our built-in guideline on: **{match['topic']}**")
 
     # --- Generate an answer if none provided (Ask & Check mode) ---------------
     if not answer.strip():
-        with st.spinner("✍️ No answer provided — writing one from the guideline, then auditing it…"):
+        with st.spinner("✍️ Writing an answer from the guideline, then checking it…"):
             try:
                 answer = generate_answer(question, source, api_key=manual_key or None)
             except Exception as err:
                 st.error(f"Answer generation failed: {err}")
                 st.stop()
-        st.info("🤖 You didn't provide an answer, so MedGuard **generated one from the guideline** (shown below) and then audited it.")
-        with st.expander("🤖 See the generated answer", expanded=False):
-            st.write(answer)
+        st.info("🤖 You didn't paste an answer, so we **wrote one from the guideline** — here it is:")
+        st.markdown(f'<div class="mg-card">{answer}</div>', unsafe_allow_html=True)
 
-    with st.spinner("Auditing — extracting claims, verifying against the source…"):
+    with st.spinner("Checking the answer against the guideline…"):
         try:
             result = run_audit(
                 question=question,
@@ -489,7 +489,7 @@ if run_clicked:
                 api_key=manual_key or None,
             )
         except Exception as err:
-            st.error(f"Audit failed: {err}")
+            st.error(f"Check failed: {err}")
             st.stop()
 
     render_verdict(result["verdict"], result["coverage"], result["reason"])
@@ -503,23 +503,24 @@ if run_clicked:
 
     if result.get("crosscheck_score") is not None:
         pct = max(0.0, min(1.0, float(result["crosscheck_score"]))) * 100
-        st.markdown("### Independent cross-check")
-        st.markdown(
-            f"""
-            <div class="mg-card">
-              <div style="display:flex; justify-content:space-between; align-items:baseline;">
-                <div style="color:#AEB7C8;">{result["crosscheck_checker"].upper()} consistency score</div>
-                <div style="font-family:'Outfit'; font-weight:800; font-size:1.5rem; color:#00D4AA;">{pct:.0f}%</div>
-              </div>
-              <div class="mg-meter"><div style="width:{pct:.0f}%;"></div></div>
-              <div class="v-sub" style="margin-top:8px;">A second, architecturally different referee
-              (a small dedicated model — not an LLM) scoring whether the answer is supported by the source.</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        with st.expander("🔬 Second opinion (independent AI checker)"):
+            st.markdown(
+                f"""
+                <div class="mg-card">
+                  <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                    <div style="color:#AEB7C8;">{result["crosscheck_checker"].upper()} agreement score</div>
+                    <div style="font-family:'Outfit'; font-weight:800; font-size:1.5rem; color:#00D4AA;">{pct:.0f}%</div>
+                  </div>
+                  <div class="v-sub" style="margin-top:8px;">A second, independent checker
+                  (a different kind of AI — not the one that judged above) was also asked
+                  whether the answer follows the guideline. Higher = more agreement.</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-    with st.expander("🔧 Raw audit result (JSON)"):
+    with st.expander("🔧 Technical details (for engineers)"):
+        st.caption(f"Trust score: {result['coverage']}% of the answer's claims were backed by the guideline.")
         st.json(json.dumps(result, indent=2, ensure_ascii=False))
 
 st.markdown(
