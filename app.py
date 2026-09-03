@@ -536,7 +536,16 @@ if run_clicked:
                 api_key=manual_key or None,
             )
         except Exception as err:
-            st.error(f"Audit failed: {err}")
+            from medguard.audit import RateLimitError  # noqa: PLC0415
+
+            if isinstance(err, RateLimitError):
+                st.warning(
+                    "⏳ Groq's free tier needs a short breather (rate limit). "
+                    "Wait about a minute and press **Audit this answer** again — "
+                    "nothing is broken."
+                )
+            else:
+                st.error(f"Audit failed: {err}")
             st.stop()
 
     render_verdict(result["verdict"], result["coverage"], result["reason"])

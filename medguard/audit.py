@@ -36,6 +36,21 @@ EXTRACTION_FALLBACK_MODEL = "openai/gpt-oss-20b"  # extraction ONLY (D6)
 
 MAX_RETRIES = 3
 BASE_MAX_TOKENS = 4096
+MAX_CLAIMS = 15  # audit cap: beyond this the batched call risks token limits
+
+# Retry-after backoff for rate limits (seconds) — Groq free tier 429s under bursts.
+_BACKOFF_SECONDS = (2, 4, 8)
+# Hard ceiling on a single API call; a hung call must fail, not spin forever.
+_API_TIMEOUT_SECONDS = 60
+
+
+class RateLimitError(Exception):
+    """Groq free-tier rate limit hit (429). Raised after backoff retries fail."""
+
+
+def _is_rate_limit(err: Exception) -> bool:
+    text = str(err)
+    return "429" in text or "rate limit" in text.lower() or "Rate limit reached" in text
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +79,8 @@ def _resolve_api_key(api_key: str | None = None) -> str:
 def _get_client(api_key: str | None = None):
     from groq import Groq
 
-    return Groq(api_key=_resolve_api_key(api_key))
+    # Timeout: a hung call raises instead of spinning the UI forever.
+    return Groq(api_key=_resolve_api_key(api_key), timeout=_API_TIMEOUT_SECONDS)
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +125,7 @@ def _chat_json(
     - reasoning_effort='low' for gpt-oss reasoning models (graceful fallback)
     - empty content from reasoning models -> retry with more tokens
     - retries on malformed JSON
+    - 429 rate limits -> exponential backoff (2s/4s/8s) then a friendly error
     """
     last_error: Exception | None = None
     current_max_tokens = max_tokens
@@ -126,10 +143,21 @@ def _chat_json(
         if "gpt-oss" in model:
             try:
                 return _do_call(client, {**kwargs, "reasoning_effort": "low"})
+            except RateLimitError:
+                raise  # handled by the outer backoff below
             except Exception as err:  # TypeError (old SDK) or API 400 (param rejected)
                 last_error = err
         try:
             return _do_call(client, kwargs)
+        except RateLimitError:
+            # Free-tier 429: wait politely and retry — do NOT give up early.
+            if attempt < MAX_RETRIES:
+                time.sleep(_BACKOFF_SECONDS[min(attempt - 1, len(_BACKOFF_SECONDS) - 1)])
+                continue
+            raise RateLimitError(
+                "Groq's free tier hit its rate limit. Wait about a minute and "
+                "try again — the audit itself is fine, the server just needs a breather."
+            ) from None
         except (ValueError, json.JSONDecodeError) as err:
             # Malformed JSON: retry, giving the reasoning model more headroom
             last_error = err
@@ -148,7 +176,12 @@ def _chat_json(
 
 
 def _do_call(client, kwargs: dict) -> dict[str, Any]:
-    response = client.chat.completions.create(**kwargs)
+    try:
+        response = client.chat.completions.create(**kwargs)
+    except Exception as err:
+        if _is_rate_limit(err):
+            raise RateLimitError(str(err)) from err
+        raise
     choice = response.choices[0]
     content = (choice.message.content or "").strip()
 
@@ -157,6 +190,23 @@ def _do_call(client, kwargs: dict) -> dict[str, Any]:
         raise RuntimeError("Empty content returned (reasoning exhausted the token budget).")
 
     return extract_json_object(content)
+
+
+def _create_with_rate_retry(client, kwargs: dict, max_attempts: int = 3):
+    """Plain-text completions call with free-tier 429 backoff (2s/4s/8s)."""
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as err:
+            if _is_rate_limit(err) and attempt < max_attempts:
+                time.sleep(_BACKOFF_SECONDS[min(attempt - 1, len(_BACKOFF_SECONDS) - 1)])
+                continue
+            if _is_rate_limit(err):
+                raise RateLimitError(
+                    "Groq's free tier hit its rate limit. Wait about a minute and "
+                    "try again — the audit itself is fine, the server just needs a breather."
+                ) from err
+            raise
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +246,22 @@ def extract_claims(
     # Guarantee sequential, unique ids regardless of what the model returned
     for new_id, claim in enumerate(claims, start=1):
         claim["claim_id"] = new_id
+
+    # Claim cap: very long answers can produce dozens of claims, which risks
+    # blowing the verification call's token budget. Audit the first MAX_CLAIMS
+    # and report the truncation honestly (the audit never hides what it skipped).
+    if len(claims) > MAX_CLAIMS:
+        claims = claims[:MAX_CLAIMS]
+        claims.append(
+            {
+                "claim_id": MAX_CLAIMS,
+                "claim": (
+                    f"(This answer contained more claims than the audit limit of "
+                    f"{MAX_CLAIMS} — the remaining ones were not checked.)"
+                ),
+                "truncated": True,
+            }
+        )
     return claims
 
 
@@ -307,7 +373,7 @@ def generate_answer(
     current_max_tokens = BASE_MAX_TOKENS
     last_error: Exception | None = None
 
-    for _attempt in range(MAX_RETRIES):
+    for attempt in range(1, MAX_RETRIES + 1):
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,
@@ -316,11 +382,13 @@ def generate_answer(
         }
         if "gpt-oss" in model:
             try:
-                response = client.chat.completions.create(**kwargs, reasoning_effort="low")
+                response = _create_with_rate_retry(client, {**kwargs, "reasoning_effort": "low"})
                 content = (response.choices[0].message.content or "").strip()
                 if content:
                     return content
                 raise RuntimeError("Empty content from reasoning model.")
+            except RateLimitError:
+                raise
             except RuntimeError as err:
                 last_error = err
                 current_max_tokens = int(current_max_tokens * 1.5)
@@ -328,11 +396,13 @@ def generate_answer(
             except Exception as err:  # SDK/API rejected reasoning_effort — plain retry
                 last_error = err
         try:
-            response = client.chat.completions.create(**kwargs)
+            response = _create_with_rate_retry(client, kwargs)
             content = (response.choices[0].message.content or "").strip()
             if content:
                 return content
             raise RuntimeError("Empty content from reasoning model.")
+        except RateLimitError:
+            raise
         except RuntimeError as err:
             last_error = err
             current_max_tokens = int(current_max_tokens * 1.5)
@@ -414,23 +484,43 @@ def run_audit(
         verdict = compute_verdict([], has_answer=True)
         return _assemble(question, source, answer, [], None, verdict)
 
+    # Split off the truncation marker (if any) — it is a note, not a claim to judge.
+    truncation_note = None
+    real_claims = []
+    for c in claims:
+        if c.get("truncated"):
+            truncation_note = c["claim"]
+        else:
+            real_claims.append(c)
+    claims = real_claims
+
     verified = verify_claims(claims, source, question, model=model, api_key=api_key)
     statuses = [v["status"] for v in verified]
+
+    # Claim-level verdict first — the holistic call only runs when it can change
+    # the outcome (SAFE/WARNING). An already-BLOCKED audit needs no third call.
+    verdict = compute_verdict(statuses)
 
     # Final holistic safety review in the patient's context (Upgrade 3).
     # A CONTRADICTION here promotes the verdict to BLOCKED — this is what
     # catches e.g. drug-interaction dangers the claim loop can miss.
-    holistic = holistic_check(question, source, answer, model=model, api_key=api_key)
+    holistic = {"status": "OK", "reasoning": "", "evidence": None}
+    if verdict["verdict"] != "BLOCKED":
+        holistic = holistic_check(question, source, answer, model=model, api_key=api_key)
     if holistic["status"] == "CONTRADICTION":
         statuses = statuses + ["CONTRADICTION"]
-
-    verdict = compute_verdict(statuses)
-    if holistic["status"] == "CONTRADICTION" and verdict["verdict"] != "BLOCKED":
-        verdict = dict(verdict, verdict="BLOCKED", coverage=0)
-    if holistic["status"] == "CONTRADICTION":
-        base_reason = verdict.get("reason", "")
+        verdict = compute_verdict(statuses)
+        if verdict["verdict"] != "BLOCKED":
+            verdict = dict(verdict, verdict="BLOCKED", coverage=0)
         plain = holistic.get("reasoning") or "the answer gives dangerous guidance for this patient"
+        base_reason = verdict.get("reason", "")
         verdict = dict(verdict, reason=f"{plain} ({base_reason})" if base_reason else plain)
+
+    if truncation_note:
+        verdict = dict(verdict)
+        verdict["reason"] = (
+            f"{verdict['reason']} (Note: {truncation_note})"
+        )
 
     crosscheck: tuple[str, float | None] | None = None
     if crosschecker and crosschecker.lower() != "none":
