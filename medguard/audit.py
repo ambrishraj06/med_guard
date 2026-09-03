@@ -23,7 +23,7 @@ import json
 import os
 import re
 import time
-from typing import Any
+from typing import Any, Callable
 
 from medguard import prompts
 from medguard.verdict import compute_verdict, normalize_status
@@ -467,6 +467,7 @@ def run_audit(
     crosschecker: str = "none",
     api_key: str | None = None,
     thorough: bool = True,
+    progress: Callable[[str], None] | None = None,
 ) -> dict:
     """Orchestrate the full MedGuard audit and return the final result dict.
 
@@ -474,6 +475,9 @@ def run_audit(
     safety review (the warfarin-interaction catcher).
     thorough=False ("Fast" mode): skip the holistic review — two LLM calls
     instead of three, ~30% faster, still fully claim-verified.
+    progress: optional callback invoked with "extract", "verify", "holistic",
+    "crosscheck" right before each pipeline phase runs — used by app.py to
+    animate the audit stages live.
     """
     source = (source or "").strip()
     answer = (answer or "").strip()
@@ -486,6 +490,8 @@ def run_audit(
         verdict = compute_verdict(None, has_answer=False)
         return _assemble(question, source, answer, [], None, verdict)
 
+    if progress:
+        progress("extract")
     claims = extract_claims(answer, model=model, api_key=api_key, question=question)
     if not claims:
         verdict = compute_verdict([], has_answer=True)
@@ -501,6 +507,8 @@ def run_audit(
             real_claims.append(c)
     claims = real_claims
 
+    if progress:
+        progress("verify")
     verified = verify_claims(claims, source, question, model=model, api_key=api_key)
     statuses = [v["status"] for v in verified]
 
@@ -515,7 +523,14 @@ def run_audit(
     # the claim verdict is already BLOCKED (nothing left to promote).
     holistic = {"status": "OK", "reasoning": "", "evidence": None}
     if thorough and verdict["verdict"] != "BLOCKED":
+        if progress:
+            progress("holistic")
         holistic = holistic_check(question, source, answer, model=model, api_key=api_key)
+    elif thorough and progress:
+        # Claim verification already found a contradiction — the holistic
+        # review can only *promote* to BLOCKED, so running it would change
+        # nothing. Report the skip so the UI can show why stage 3 is skipped.
+        progress("holistic-skip")
     if holistic["status"] == "CONTRADICTION":
         statuses = statuses + ["CONTRADICTION"]
         verdict = compute_verdict(statuses)
@@ -533,6 +548,8 @@ def run_audit(
 
     crosscheck: tuple[str, float | None] | None = None
     if crosschecker and crosschecker.lower() != "none":
+        if progress:
+            progress("crosscheck")
         try:
             # Per-claim cross-checking: HHEM scores each extracted claim
             # independently — a claim-level second opinion aligned with the

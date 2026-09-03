@@ -15,8 +15,11 @@ Design language (locked decision D10):
 Run:  streamlit run app.py
 """
 
+import hashlib
 import json
+import queue
 import sys
+import threading
 import traceback
 from pathlib import Path
 
@@ -89,6 +92,17 @@ st.markdown(
   html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
   h1, h2, h3 { font-family: 'Outfit', 'Inter', sans-serif !important; letter-spacing: .3px; }
   #MainMenu, footer, header { visibility: hidden; }
+  /* The collapsed-sidebar reopen arrow (stExpandSidebarButton) renders
+     INSIDE that hidden header — without this rule the sidebar can be
+     closed but never opened again. */
+  header [data-testid="stExpandSidebarButton"],
+  header [data-testid="stExpandSidebarButton"] * {
+      visibility: visible !important; }
+  header [data-testid="stExpandSidebarButton"] {
+      background: rgba(20,27,45,.9) !important;
+      border: 1px solid rgba(0,212,170,.4) !important;
+      border-radius: 10px !important;
+      box-shadow: 0 4px 18px rgba(0,212,170,.2) !important; }
   .stApp { background:
       radial-gradient(1100px 500px at 85% -10%, rgba(0,212,170,.10), transparent 60%),
       radial-gradient(900px 420px at -10% 110%, rgba(94,120,255,.08), transparent 60%),
@@ -517,48 +531,224 @@ run_clicked = st.button(
 )
 
 # ---------------------------------------------------------------------------
-# Staged audit runner — staged progress + Fast/Thorough toggle + caching
+# Staged audit runner — live stage animation + Fast/Thorough toggle + memo
 # ---------------------------------------------------------------------------
 st.markdown(
     """
 <style>
-  .mg-progress { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 10px 0; }
-  .mg-progress span { font-size:.8rem; color:#8B95A9; padding:4px 10px;
-      border-radius:999px; border:1px solid rgba(226,232,240,.15); }
+  /* ---------- stage rail (chips) ---------- */
+  .mg-progress { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 12px 0; }
+  .mg-progress span { font-size:.8rem; color:#8B95A9; padding:5px 12px;
+      border-radius:999px; border:1px solid rgba(226,232,240,.15);
+      transition: all .3s ease; }
   .mg-progress span.on { color:#0A0E1A; background:#00D4AA; border-color:#00D4AA; font-weight:700; }
+  .mg-progress span.active { animation: mgChipGlow 1.4s ease-in-out infinite; }
+  .mg-progress span.done { color:#7BF1D9; border-color:rgba(0,212,170,.45); }
+  @keyframes mgChipGlow { 0%,100% { box-shadow: 0 0 0 rgba(0,212,170,0); }
+                          50% { box-shadow: 0 0 14px rgba(0,212,170,.55); } }
+
+  /* ---------- premium dual-ring spinner ---------- */
+  .mg-scan { position:relative; width:54px; height:54px; flex:none; }
+  .mg-scan .ring { position:absolute; inset:0; border-radius:50%;
+      border:2.5px solid rgba(0,212,170,.12); border-top-color:#00D4AA;
+      animation: mgSpin .9s linear infinite; }
+  .mg-scan .ring2 { position:absolute; inset:7px; border-radius:50%;
+      border:2.5px solid transparent; border-bottom-color:#7BF1D9;
+      animation: mgSpin 1.4s linear infinite reverse; }
+  .mg-scan .shield { position:absolute; inset:0; display:flex; align-items:center;
+      justify-content:center; font-size:1.2rem;
+      animation: mgThrob 1.8s ease-in-out infinite; }
+  @keyframes mgSpin { to { transform: rotate(360deg); } }
+  @keyframes mgThrob { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+
+  /* ---------- current-stage line ---------- */
+  .mg-stage-line { display:flex; align-items:center; gap:14px; margin:4px 0 10px 0; }
+  .mg-stage-label { color:#E2E8F0; font-weight:700; letter-spacing:.4px;
+      font-family:'Outfit','Inter',sans-serif; }
+  .mg-stage-sub { color:#8B95A9; font-size:.82rem; margin-top:3px; }
+
+  /* ---------- verdict/claim polish ---------- */
+  .mg-meter > div { transform-origin: left;
+      animation: mgFill 1.1s cubic-bezier(.2,.7,.3,1) both; }
+  @keyframes mgFill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .mg-claim { animation: mgIn .45s ease both; }
+  .mg-claim:nth-child(2) { animation-delay: .06s; }
+  .mg-claim:nth-child(3) { animation-delay: .12s; }
+  .mg-claim:nth-child(4) { animation-delay: .18s; }
+  [data-testid="stTextArea"] textarea:focus {
+      border-color: rgba(0,212,170,.6) !important;
+      box-shadow: 0 0 0 3px rgba(0,212,170,.12) !important; }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
+_STAGE_KEYS = ["extract", "verify", "holistic", "crosscheck"]
+_STAGE_INFO = {
+    "extract": (
+        "1 · Reading claims",
+        "Finding every medical claim in the answer — including implied ones…",
+    ),
+    "verify": (
+        "2 · Verifying against the guideline",
+        "Checking each claim against the official source text…",
+    ),
+    "holistic": (
+        "3 · Final safety review",
+        "One last look at the whole answer in patient context…",
+    ),
+    "holistic-skip": (
+        "3 · Final safety review — not needed",
+        "The claim check already found a dangerous contradiction, so the third "
+        "review cannot change the verdict. Skipping it keeps the audit fast.",
+    ),
+    "crosscheck": (
+        "4 · Independent second opinion",
+        "A separate checker scores how well each claim follows the guideline…",
+    ),
+    "done": (
+        "✔ Audit complete",
+        "Building the report…",
+    ),
+}
+_STAGE_CHIP_LABELS = {
+    "extract": "1 · Reading claims",
+    "verify": "2 · Verifying",
+    "holistic": "3 · Safety review",
+    "crosscheck": "4 · Second opinion",
+}
 
-def _progress_stage(active: str) -> None:
-    stages = ["1 · Reading claims", "2 · Verifying against guideline", "3 · Final safety review"]
-    idx = stages.index(active) if active in stages else 0
-    chips = "".join(
-        f'<span class="{"on" if i <= idx else ""}">{s}</span>' for i, s in enumerate(stages)
-    )
-    st.markdown(f'<div class="mg-progress">{chips}</div>', unsafe_allow_html=True)
 
-
-@st.cache_data(show_spinner=False, max_entries=64)
-def _cached_audit(question: str, source: str, answer: str, checker: str, thorough: bool) -> dict:
-    """Cache wrapper: identical re-audits cost ZERO API calls. The pipeline
-    itself is the same run_audit — staging happens in _run_staged_audit below."""
-    return run_audit(
-        question=question, source=source, answer=answer,
-        crosschecker=checker, thorough=thorough,
-    )
-
-
-def _run_staged_audit(question: str, source: str, answer: str, checker: str, thorough: bool) -> dict:
-    """Runs the audit with visible stages. Calls the cached wrapper so an
-    identical repeat returns instantly (demo-friendly)."""
+def _stage_chips(active: str, visible: list[str]) -> str:
+    """Chips for the stages this audit mode actually runs: everything before
+    the active stage is done (green outline), the active stage glows, later
+    stages stay dim. On 'done', all visible stages are done."""
+    active = "holistic" if active == "holistic-skip" else active
+    keys = [k for k in _STAGE_KEYS if k in visible]
     try:
-        _progress_stage("1 · Reading claims")
-        return _cached_audit(question, source, answer, checker, thorough)
-    except Exception as err:
-        raise err
+        idx = keys.index(active)
+    except ValueError:
+        idx = len(keys)
+    chips = []
+    for i, key in enumerate(keys):
+        cls = "done" if i < idx else ("on active" if i == idx else "")
+        chips.append(f'<span class="{cls}">{_STAGE_CHIP_LABELS[key]}</span>')
+    return "".join(chips)
+
+
+def _paint_stage(box, key: str, visible: list[str]) -> None:
+    """Paint the audit-in-progress card (spinner + stage text + chips) into an
+    st.empty() container — live-updating, so each stage lights up as it runs."""
+    label, sub = _STAGE_INFO[key]
+    if key == "done":
+        spinner = ""
+        label_html = f'<div class="mg-stage-label" style="color:#7BF1D9;">{label}</div>'
+    else:
+        spinner = (
+            '<div class="mg-scan"><div class="ring"></div>'
+            '<div class="ring2"></div><div class="shield">🛡️</div></div>'
+        )
+        label_html = f'<div class="mg-stage-label">{label}</div>'
+    box.markdown(
+        f"""
+<div class="mg-stage-line">{spinner}{label_html}</div>
+<div class="mg-stage-sub" style="margin:-6px 0 10px 68px;">{sub}</div>
+<div class="mg-progress">{_stage_chips(key, visible)}</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def _audit_cache_key(question: str, source: str, answer: str, checker: str,
+                     thorough: bool, api_key: str | None) -> str:
+    h = hashlib.sha1()
+    for part in (question, source, answer, checker, str(thorough), api_key or ""):
+        h.update(part.encode("utf-8", "ignore"))
+        h.update(b"\x1f")
+    return h.hexdigest()
+
+
+def _run_staged_audit(question: str, source: str, answer: str, checker: str,
+                      thorough: bool, api_key: str | None = None) -> dict:
+    """Run the audit in a background thread while painting live stage updates.
+
+    run_audit reports each pipeline phase as it starts (via the progress
+    callback); those events flow through a queue to this thread, which repaints
+    the stage card — so chips 1→2→3 genuinely light up as the work happens.
+    Identical re-audits within the session hit the memo and cost ZERO API calls.
+    """
+    ck = _audit_cache_key(question, source, answer, checker, thorough, api_key)
+    memo = st.session_state.setdefault("mg_audit_cache", {})
+    if ck in memo:
+        return memo[ck]
+
+    # Only the stages this mode can actually run get a chip — Fast mode (or
+    # checker "none") never pretends a step happened that was skipped.
+    visible = ["extract", "verify"]
+    if thorough:
+        visible.append("holistic")
+    if checker and checker.lower() != "none":
+        visible.append("crosscheck")
+
+    events: queue.Queue = queue.Queue()
+
+    def worker() -> None:
+        try:
+            events.put(("stage", "extract"))
+            result = run_audit(
+                question=question, source=source, answer=answer,
+                crosschecker=checker, thorough=thorough, api_key=api_key,
+                progress=lambda key: events.put(("stage", key)),
+            )
+            events.put(("result", result))
+        except Exception as err:  # noqa: BLE001 — surfaced to the UI thread
+            events.put(("error", err))
+
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+
+    box = st.empty()
+    active = "extract"
+    _paint_stage(box, active, visible)
+    result = None
+    error = None
+    while True:
+        try:
+            kind, payload = events.get(timeout=0.4)
+            if kind == "stage":
+                active = payload
+                _paint_stage(box, active, visible)
+            elif kind == "result":
+                result = payload
+                break
+            else:  # "error"
+                error = payload
+                break
+        except queue.Empty:
+            if not t.is_alive():
+                # Drain any final events the worker queued just before exiting.
+                while True:
+                    try:
+                        kind, payload = events.get_nowait()
+                    except queue.Empty:
+                        break
+                    if kind == "result":
+                        result = payload
+                    elif kind == "error":
+                        error = payload
+                break
+            _paint_stage(box, active, visible)  # keep the animation alive between stages
+
+    if error is not None:
+        raise error
+    if result is None:
+        raise RuntimeError("The audit stopped before completing. Please press Audit again.")
+    _paint_stage(box, "done", visible)
+
+    if len(memo) >= 16:
+        memo.pop(next(iter(memo)))  # drop the oldest entry
+    memo[ck] = result
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -594,7 +784,8 @@ if run_clicked:
     thorough_mode = audit_mode == "🔍 Thorough (full audit)"
     try:
         result = _run_staged_audit(
-            question, source, answer, checker_clean, thorough_mode
+            question, source, answer, checker_clean, thorough_mode,
+            api_key=manual_key or None,
         )
     except Exception as err:
         from medguard.audit import RateLimitError  # noqa: PLC0415
