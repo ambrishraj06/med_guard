@@ -133,6 +133,50 @@ and a grounding auditor must not use medical priors anyway).
 
 ---
 
+## 🧪 Validation — "I evaluated my evaluator"
+
+MedGuard's audit quality is **measured, not assumed**. Two layers of testing, both against the
+real Groq API (no mocks):
+
+### 1. Adversarial battery — 20 hard cases ([`scripts/hard_battery.py`](scripts/hard_battery.py))
+
+Prompt injection, dose escalations, negation flips, fabricated citations, drug-interaction
+downplay, overdose reassurance, kitchen-sink mixed answers, and honest answers that must pass.
+**Result: 20/20** — including both prompt-injection attacks defeated (the injected instructions
+are treated as data to audit, never commands to obey).
+
+### 2. Hand-labeled eval set — 25 cases ([`scripts/eval_set.py`](scripts/eval_set.py))
+
+Verdict-level ground truth labeled case-by-case from the source texts before automated scoring:
+
+| Metric | Result |
+|---|---|
+| **Verdict accuracy (acceptable-set)** | **25/25 = 100%** |
+| **Danger recall** — dangerous answers NOT passed as SAFE | **14/14 = 100%** |
+| **False-SAFE verdicts on dangerous answers** (the catastrophic failure mode) | **0** — none across all runs |
+| Unsupported-only answers correctly flagged | 2/2 = 100% |
+| Honest answers passed as SAFE | 4/6 (the other 2 returned WARNING — the strict verifier's safe-direction error, documented in the eval file) |
+| Unknown-disease questions refused honestly | all (abstain or strict neighbor-topic audit — never a silent pass) |
+
+### 3. Judge-vs-judge agreement — the "who audits the auditor?" answer
+
+The same eval set run through **two different judges** (`openai/gpt-oss-120b` vs
+`openai/gpt-oss-20b`): **21/24 = 88% verdict agreement**. The three disagreements were all
+one-step verdict differences (SAFE↔WARNING, WARNING↔BLOCKED) — never a
+dangerous-vs-safe flip. This is inter-rater reliability measured on our own auditor.
+
+**Known limitations (stated honestly):** the judge errs on the strict side — a hedged paraphrase
+of a supported statement can be flagged UNSUPPORTED (safe direction, but it costs some
+precision on good answers); the library's guideline texts are simplified summaries, not verbatim
+official documents (the app says so on screen); retrieval is keyword-based, so rare diseases
+abstain rather than guess — by design.
+
+*Eval artifacts: [`scripts/eval_results.json`](scripts/eval_results.json),
+[`scripts/hard_battery_results.json`](scripts/hard_battery_results.json). Both suites are
+re-runnable end-to-end with one command each.*
+
+---
+
 ## Golden demo (prefilled in the app)
 
 - **Q:** first-line antibiotic for uncomplicated UTI in pregnant women?
@@ -148,8 +192,8 @@ and a grounding auditor must not use medical priors anyway).
 
 ## Roadmap
 
-1. **Evaluate the evaluator** — hand-labeled 20–30 triplet test set; precision/recall of claim
-   labels; HHEM vs MiniCheck comparison on our data
+1. ~~Evaluate the evaluator~~ **DONE** — see the Validation section above (25-case eval set,
+   100% danger recall, zero false-SAFE, 88% judge agreement)
 2. Phase-2 demo RAG bot (same Groq key) so sources flow in automatically
 3. FastAPI endpoint + React/Vercel frontend (the engine is already UI-agnostic)
 4. Calibrated confidence; multi-guideline conflict handling; source attribution
