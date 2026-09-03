@@ -81,6 +81,22 @@ def hhem_score(source: str, answer: str) -> float:
     return float(sum(scores) / len(scores))
 
 
+def hhem_score_claims(source: str, claims: list[str]) -> list[float]:
+    """HHEM consistency score for EACH claim against the source, in [0, 1].
+
+    This is the claim-level second opinion: for every atomic claim the judge
+    extracted, HHEM independently scores whether the source supports it.
+    Returns one score per claim, same order as the input.
+    """
+    model = _load_hhem()
+    if not claims:
+        return []
+    pairs = [(source, c) for c in claims]
+    with __import__("torch").no_grad():
+        scores = model.predict(pairs)
+    return [float(s) for s in scores]
+
+
 def _load_minicheck():
     global _minicheck_scorer
     if _minicheck_scorer is not None:

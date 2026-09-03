@@ -435,8 +435,36 @@ def run_audit(
     crosscheck: tuple[str, float | None] | None = None
     if crosschecker and crosschecker.lower() != "none":
         try:
-            score = run_crosscheck(source, answer, crosschecker)
-            crosscheck = (crosschecker, score)
+            # Per-claim cross-checking: HHEM scores each extracted claim
+            # independently — a claim-level second opinion aligned with the
+            # judge's claim-by-claim audit. Also detects judge/checker
+            # disagreement, which is surfaced on the affected claims.
+            if crosschecker.lower() == "hhem":
+                from medguard.crosscheck import hhem_score_claims
+
+                claim_scores = hhem_score_claims(
+                    source, [v["claim"] for v in verified]
+                )
+                for v, cs in zip(verified, claim_scores):
+                    v["crosscheck_score"] = round(cs, 4)
+                    # Disagreement: judge says SUPPORTED but HHEM strongly refutes
+                    if v["status"] == "SUPPORTED" and cs < 0.3:
+                        v["disagreement"] = (
+                            "The independent checker doubts this claim even though "
+                            "the judge accepted it."
+                        )
+                    elif v["status"] == "UNSUPPORTED" and cs > 0.7:
+                        v["disagreement"] = (
+                            "The independent checker supports this claim even though "
+                            "the judge did not."
+                        )
+                if claim_scores:
+                    crosscheck = (crosschecker, sum(claim_scores) / len(claim_scores))
+                else:
+                    crosscheck = (crosschecker, None)
+            else:
+                score = run_crosscheck(source, answer, crosschecker)
+                crosscheck = (crosschecker, score)
         except Exception as err:  # never let a cross-checker crash the audit
             crosscheck = (crosschecker, None)
             verdict = dict(verdict)

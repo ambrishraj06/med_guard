@@ -223,12 +223,24 @@ def render_claims(claims: list[dict]) -> None:
                 f'<div class="mg-quote" style="margin-top:8px;"><b>From the guideline:</b> “{c["evidence"]}”</div>'
             )
         why = c.get("reasoning") or ""
+        cc = c.get("crosscheck_score")
+        cc_html = (
+            f'<div class="c-why" style="margin-top:4px;">🔬 Independent checker: <b>{int(cc*100)}%</b> support</div>'
+            if cc is not None else ""
+        )
+        disagree = c.get("disagreement")
+        disagree_html = (
+            f'<div class="c-why" style="margin-top:4px;color:#FFA502;">⚖️ {disagree}</div>'
+            if disagree else ""
+        )
         st.markdown(
             f"""
             <div class="mg-claim">
               <span class="mg-chip" style="background:{color};">{icon} {label}</span>
               <div class="c-text" style="margin-top:7px;">“{c["claim"]}”</div>
               <div class="c-why">{why}</div>
+              {cc_html}
+              {disagree_html}
               {evidence_html}
             </div>
             """,
@@ -420,7 +432,10 @@ with st.sidebar:
             "hhem" if checkers["hhem"] else "hhem (unavailable — install torch+transformers)",
             "minicheck" if checkers["minicheck"] else "minicheck (unavailable — pip install minicheck)",
         ]
-        checker = st.selectbox("Second opinion", checker_options, index=0)
+        # HHEM is the default when it is available — the independent second
+        # opinion runs automatically on every audit.
+        default_idx = 1 if checkers["hhem"] else 0
+        checker = st.selectbox("Second opinion", checker_options, index=default_idx)
         checker_clean = checker.split(" (")[0]
         st.caption(
             "HHEM / MiniCheck are small non-LLM models that independently score whether "
