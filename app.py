@@ -657,24 +657,29 @@ if run_clicked:
         st.json(json.dumps(result, indent=2, ensure_ascii=False))
 
 # ---------------------------------------------------------------------------
-# History — last 5 audits, viewable without re-running
+# History — last 5 audits, viewable without re-running.
+# NOTE: flat siblings only — expanders must never be nested inside another
+# expander; newer Streamlit versions raise an exception on nesting.
 # ---------------------------------------------------------------------------
 hist = st.session_state.get("mg_history", [])
 if hist:
-    with st.expander(f"🕘 Recent audits ({len(hist)}) — click to view without re-running"):
-        for i, h in enumerate(hist):
-            v = h["result"]["verdict"]
-            icon = {"BLOCKED": "🔴", "SAFE": "🟢", "WARNING": "🟡", "UNVERIFIABLE": "⚪"}.get(v, "⚪")
-            label = (h["q"][:55] + "…") if len(h["q"]) > 55 else h["q"]
-            sub = st.expander(f"{icon} {label} — {v}", expanded=(i == 0))
-            with sub:
-                r = h["result"]
-                st.markdown(f"**Verdict:** {v} · **Trust score:** {r['coverage']}%")
-                st.caption(r["reason"][:300])
-                st.caption(f"Audited with: {h['checker'] if h['checker'] != 'none' else 'judge only'} · "
-                           f"{'Thorough' if h['thorough'] else 'Fast'} mode")
-                for c in r["claims"][:4]:
-                    st.markdown(f"- `{'✅' if c['status']=='SUPPORTED' else '❔' if c['status']=='UNSUPPORTED' else '🚫'}` {c['claim'][:90]}")
+    st.markdown(
+        f'<div class="mg-card" style="padding:10px 16px; margin-top:8px;">🕘 '
+        f"<b>Recent audits</b> ({len(hist)}) — click one to view it without re-running</div>",
+        unsafe_allow_html=True,
+    )
+    for i, h in enumerate(hist):
+        v = h["result"]["verdict"]
+        icon = {"BLOCKED": "🔴", "SAFE": "🟢", "WARNING": "🟡", "UNVERIFIABLE": "⚪"}.get(v, "⚪")
+        label = (h["q"][:55] + "…") if len(h["q"]) > 55 else h["q"]
+        with st.expander(f"{icon} {label} — {v}", expanded=(i == 0)):
+            r = h["result"]
+            st.markdown(f"**Verdict:** {v} · **Trust score:** {r['coverage']}%")
+            st.caption(r["reason"][:300])
+            st.caption(f"Audited with: {h['checker'] if h['checker'] != 'none' else 'judge only'} · "
+                       f"{'Thorough' if h['thorough'] else 'Fast'} mode")
+            for c in r["claims"][:4]:
+                st.markdown(f"- `{'✅' if c['status']=='SUPPORTED' else '❔' if c['status']=='UNSUPPORTED' else '🚫'}` {c['claim'][:90]}")
 # ---------------------------------------------------------------------------
 # Empty state — before the first audit
 # ---------------------------------------------------------------------------

@@ -1,5 +1,8 @@
 # MedGuard — core dependencies (deploy-safe, minimal)
-streamlit>=1.40
+# Pinned to the EXACT version tested locally: unpinned (>=) let Streamlit Cloud
+# install the latest release, and newer versions raise exceptions the local
+# build never saw (e.g. expander-nesting). Pin = local and cloud behave alike.
+streamlit==1.62.0
 groq>=0.11
 
 # --- Optional cross-checker models (NOT required by the core audit engine) ---
