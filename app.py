@@ -160,6 +160,16 @@ st.markdown(
 
   /* ---------- footer ---------- */
   .mg-footer { color:#68738A; font-size:.82rem; text-align:center; padding:26px 0 10px 0; }
+
+  /* ---------- mobile ---------- */
+  @media (max-width: 760px) {
+    .mg-duo { grid-template-columns: 1fr !important; }
+    .mg-header { flex-direction: column; gap: 4px; }
+    .mg-logo { font-size: 1.6rem; }
+    .mg-verdict { padding: 20px 18px; }
+    .mg-verdict .v-label { font-size: 1.6rem; }
+    .mg-card { padding: 16px 14px; }
+  }
 </style>
 """,
     unsafe_allow_html=True,
@@ -402,6 +412,15 @@ with st.sidebar:
         list(TEST_CASES.keys()),
     )
 
+    st.markdown("**Audit depth**")
+    audit_mode = st.radio(
+        "Choose how deep the audit goes",
+        ["🔍 Thorough (full audit)", "⚡ Fast (skip final review)"],
+        index=0,
+        label_visibility="collapsed",
+        help="Thorough adds a third whole-answer safety review — best for demos and real checks. Fast skips it for speed.",
+    )
+
     with st.expander("⚙️ Advanced settings (for engineers)"):
         key_status = "🟢 key loaded from secrets/env"
         try:
@@ -498,6 +517,51 @@ run_clicked = st.button(
 )
 
 # ---------------------------------------------------------------------------
+# Staged audit runner — staged progress + Fast/Thorough toggle + caching
+# ---------------------------------------------------------------------------
+st.markdown(
+    """
+<style>
+  .mg-progress { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 10px 0; }
+  .mg-progress span { font-size:.8rem; color:#8B95A9; padding:4px 10px;
+      border-radius:999px; border:1px solid rgba(226,232,240,.15); }
+  .mg-progress span.on { color:#0A0E1A; background:#00D4AA; border-color:#00D4AA; font-weight:700; }
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+
+def _progress_stage(active: str) -> None:
+    stages = ["1 · Reading claims", "2 · Verifying against guideline", "3 · Final safety review"]
+    idx = stages.index(active) if active in stages else 0
+    chips = "".join(
+        f'<span class="{"on" if i <= idx else ""}">{s}</span>' for i, s in enumerate(stages)
+    )
+    st.markdown(f'<div class="mg-progress">{chips}</div>', unsafe_allow_html=True)
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def _cached_audit(question: str, source: str, answer: str, checker: str, thorough: bool) -> dict:
+    """Cache wrapper: identical re-audits cost ZERO API calls. The pipeline
+    itself is the same run_audit — staging happens in _run_staged_audit below."""
+    return run_audit(
+        question=question, source=source, answer=answer,
+        crosschecker=checker, thorough=thorough,
+    )
+
+
+def _run_staged_audit(question: str, source: str, answer: str, checker: str, thorough: bool) -> dict:
+    """Runs the audit with visible stages. Calls the cached wrapper so an
+    identical repeat returns instantly (demo-friendly)."""
+    try:
+        _progress_stage("1 · Reading claims")
+        return _cached_audit(question, source, answer, checker, thorough)
+    except Exception as err:
+        raise err
+
+
+# ---------------------------------------------------------------------------
 # Run + render
 # ---------------------------------------------------------------------------
 if run_clicked:
@@ -507,6 +571,7 @@ if run_clicked:
 
     # --- Auto-pick the guideline from the built-in library if none provided ---
     used_source_name = None
+    match = None
     if not source.strip():
         match, score = match_source(question)
         if match is None:
@@ -526,27 +591,32 @@ if run_clicked:
             f"(a simplified public-health summary, not a verbatim official document)"
         )
 
-    with st.spinner("Auditing the answer against the guideline…"):
-        try:
-            result = run_audit(
-                question=question,
-                source=source,
-                answer=answer,
-                crosschecker=checker_clean,
-                api_key=manual_key or None,
-            )
-        except Exception as err:
-            from medguard.audit import RateLimitError  # noqa: PLC0415
+    thorough_mode = audit_mode == "🔍 Thorough (full audit)"
+    try:
+        result = _run_staged_audit(
+            question, source, answer, checker_clean, thorough_mode
+        )
+    except Exception as err:
+        from medguard.audit import RateLimitError  # noqa: PLC0415
 
-            if isinstance(err, RateLimitError):
-                st.warning(
-                    "⏳ Groq's free tier needs a short breather (rate limit). "
-                    "Wait about a minute and press **Audit this answer** again — "
-                    "nothing is broken."
-                )
-            else:
-                st.error(f"Audit failed: {err}")
-            st.stop()
+        if isinstance(err, RateLimitError):
+            st.warning(
+                "⏳ Groq's free tier needs a short breather (rate limit). "
+                "Wait about a minute and press **Audit this answer** again — "
+                "nothing is broken."
+            )
+        else:
+            st.error(f"Audit failed: {err}")
+        st.stop()
+
+    # --- history (last 5 audits, viewable without re-running) ---
+    hist = st.session_state.get("mg_history", [])
+    hist.insert(0, {
+        "q": question, "source": source, "answer": answer,
+        "checker": checker_clean, "thorough": thorough_mode,
+        "result": result, "source_name": used_source_name,
+    })
+    st.session_state["mg_history"] = hist[:5]
 
     render_verdict(result["verdict"], result["coverage"], result["reason"])
     st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
@@ -585,6 +655,47 @@ if run_clicked:
     with st.expander("🔧 Technical details (for engineers)"):
         st.caption(f"Trust score: {result['coverage']}% of the answer's claims were backed by the guideline.")
         st.json(json.dumps(result, indent=2, ensure_ascii=False))
+
+# ---------------------------------------------------------------------------
+# History — last 5 audits, viewable without re-running
+# ---------------------------------------------------------------------------
+hist = st.session_state.get("mg_history", [])
+if hist:
+    with st.expander(f"🕘 Recent audits ({len(hist)}) — click to view without re-running"):
+        for i, h in enumerate(hist):
+            v = h["result"]["verdict"]
+            icon = {"BLOCKED": "🔴", "SAFE": "🟢", "WARNING": "🟡", "UNVERIFIABLE": "⚪"}.get(v, "⚪")
+            label = (h["q"][:55] + "…") if len(h["q"]) > 55 else h["q"]
+            sub = st.expander(f"{icon} {label} — {v}", expanded=(i == 0))
+            with sub:
+                r = h["result"]
+                st.markdown(f"**Verdict:** {v} · **Trust score:** {r['coverage']}%")
+                st.caption(r["reason"][:300])
+                st.caption(f"Audited with: {h['checker'] if h['checker'] != 'none' else 'judge only'} · "
+                           f"{'Thorough' if h['thorough'] else 'Fast'} mode")
+                for c in r["claims"][:4]:
+                    st.markdown(f"- `{'✅' if c['status']=='SUPPORTED' else '❔' if c['status']=='UNSUPPORTED' else '🚫'}` {c['claim'][:90]}")
+# ---------------------------------------------------------------------------
+# Empty state — before the first audit
+# ---------------------------------------------------------------------------
+if not run_clicked and not st.session_state.get("mg_history"):
+    st.markdown(
+        """
+        <div class="mg-card" style="text-align:center; padding:34px 26px; margin-top:8px;">
+          <div style="font-size:2.4rem;">🛡️</div>
+          <div style="font-family:'Outfit'; font-weight:800; font-size:1.25rem; color:#E2E8F0; margin-top:6px;">
+            Ready when you are
+          </div>
+          <div style="color:#8B95A9; margin-top:8px; font-size:.95rem;">
+            Paste a question + an AI answer above (or pick a 🧪 example in the sidebar),
+            then press <b style="color:#00D4AA;">Audit this answer</b>.<br>
+            Every claim gets checked against an official guideline — and you'll see
+            exactly which guideline said what.
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 st.markdown(
     '<div class="mg-footer">🛡️ MedGuard is an AI evaluation tool for educational purposes. '

@@ -466,8 +466,15 @@ def run_audit(
     model: str = DEFAULT_JUDGE_MODEL,
     crosschecker: str = "none",
     api_key: str | None = None,
+    thorough: bool = True,
 ) -> dict:
-    """Orchestrate the full MedGuard audit and return the final result dict."""
+    """Orchestrate the full MedGuard audit and return the final result dict.
+
+    thorough=True (default): full pipeline including the final whole-answer
+    safety review (the warfarin-interaction catcher).
+    thorough=False ("Fast" mode): skip the holistic review — two LLM calls
+    instead of three, ~30% faster, still fully claim-verified.
+    """
     source = (source or "").strip()
     answer = (answer or "").strip()
 
@@ -504,8 +511,10 @@ def run_audit(
     # Final holistic safety review in the patient's context (Upgrade 3).
     # A CONTRADICTION here promotes the verdict to BLOCKED — this is what
     # catches e.g. drug-interaction dangers the claim loop can miss.
+    # "Fast" mode (thorough=False) skips it entirely; it also never runs when
+    # the claim verdict is already BLOCKED (nothing left to promote).
     holistic = {"status": "OK", "reasoning": "", "evidence": None}
-    if verdict["verdict"] != "BLOCKED":
+    if thorough and verdict["verdict"] != "BLOCKED":
         holistic = holistic_check(question, source, answer, model=model, api_key=api_key)
     if holistic["status"] == "CONTRADICTION":
         statuses = statuses + ["CONTRADICTION"]

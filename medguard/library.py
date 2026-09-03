@@ -29,7 +29,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "UTI in pregnancy",
         "source_name": "CDC / NICE",
-        "keywords": ["urine", "urinary", "uti", "bladder", "cystitis", "wee", "peeing", "burning pee", "burns when i pee", "stinging pee", "pregnant", "pregnancy"],
+        "keywords": ["urine", "urinary", "uti", "bladder", "cystitis", "wee", "peeing", "burning pee", "burns when i pee", "stinging pee", "uti in pregnancy", "pregnant woman urine", "pregnancy uti"],
         "reference": "Public guidance summary (CDC/NICE-style) — educational, simplified",
         "text": (
             "For uncomplicated cystitis in pregnant women, nitrofurantoin or cephalexin are "
@@ -40,7 +40,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "Fever in children",
         "source_name": "WHO / NICE",
-        "keywords": ["fever", "feverish", "child", "kid", "toddler", "baby", "temperature", "hot"],
+        "keywords": ["fever", "feverish", "child", "kid", "toddler", "baby fever", "temperature", "hot"],
         "reference": "Public guidance summary (WHO/NICE-style) — educational, simplified",
         "text": (
             "Aspirin should not be given to children with viral infections because of the risk of "
@@ -51,7 +51,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "Dengue fever",
         "source_name": "WHO / ICMR",
-        "keywords": ["dengue", "dengue fever", "breakbone", "platelet", "haemorrhagic", "hemorrhagic", "mosquito"],
+        "keywords": ["dengue", "dengue fever", "breakbone", "platelet", "haemorrhagic", "hemorrhagic", "dengue mosquito"],
         "reference": "Public guidance summary (WHO/ICMR-style) — educational, simplified",
         "text": (
             "Dengue is a mosquito-borne viral infection. There is no specific antiviral medicine; "
@@ -65,7 +65,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "Malaria",
         "source_name": "WHO",
-        "keywords": ["malaria", "artemisinin", "rdt", "parasite", "plasmodium", "mosquito"],
+        "keywords": ["malaria", "artemisinin", "rdt", "parasite", "plasmodium", "malaria mosquito"],
         "reference": "Public guidance summary (WHO-style) — educational, simplified",
         "text": (
             "Malaria should be confirmed by a blood test (microscopy or a rapid diagnostic test) "
@@ -128,7 +128,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "Pneumonia",
         "source_name": "WHO / CDC",
-        "keywords": ["pneumonia", "chest infection", "sputum", "lung infection"],
+        "keywords": ["pneumonia", "chest infection", "lung infection", "pneumonia cough"],
         "reference": "Public guidance summary (WHO/CDC-style) — educational, simplified",
         "text": (
             "Pneumonia is often bacterial and is treated with antibiotics chosen by a doctor after "
@@ -164,7 +164,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "Food poisoning",
         "source_name": "WHO",
-        "keywords": ["food poisoning", "vomiting", "thrown up", "ate bad", "food poisoning", "gastroenteritis"],
+        "keywords": ["food poisoning", "vomiting", "thrown up", "ate bad food", "gastroenteritis"],
         "reference": "Public guidance summary (WHO-style) — educational, simplified",
         "text": (
             "Food poisoning usually settles by itself; the priority is fluids with oral "
@@ -199,7 +199,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "Tetanus",
         "source_name": "WHO",
-        "keywords": ["tetanus", "lockjaw", "rusty nail", "dirty wound", "booster"],
+        "keywords": ["tetanus", "lockjaw", "rusty nail", "dirty wound", "tetanus booster"],
         "reference": "Public guidance summary (WHO-style) — educational, simplified",
         "text": (
             "Tetanus is prevented by vaccination; a dirty or deep wound in anyone not fully "
@@ -210,7 +210,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "Antibiotics do not work on viruses",
         "source_name": "WHO / CDC",
-        "keywords": ["antibiotic", "antibiotics", "virus", "viral", "bacteria", "sore throat", "flu", "sinus"],
+        "keywords": ["antibiotic", "antibiotics", "virus", "viral", "bacteria", "sore throat", "flu antibiotics", "sinus", "cold and cough", "runny nose"],
         "reference": "Public guidance summary (WHO/CDC-style) — educational, simplified",
         "text": (
             "Antibiotics are not effective against viral infections such as the common cold, flu, or "
@@ -221,7 +221,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "Antibiotic stewardship",
         "source_name": "WHO",
-        "keywords": ["stewardship", "resistance", "resistant", "course", "leftover", "prescribed", "finish", "skip", "dose"],
+        "keywords": ["stewardship", "resistance", "resistant", "course", "leftover", "prescribed", "finish", "skip a dose"],
         "reference": "Public guidance summary (WHO-style) — educational, simplified",
         "text": (
             "Antibiotics must be taken exactly as prescribed, and the full course must be completed "
@@ -245,7 +245,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "MMR vaccine and autism",
         "source_name": "WHO / CDC",
-        "keywords": ["mmr", "vaccine autism", "measles", "jab", "immunization", "immunisation"],
+        "keywords": ["mmr", "vaccine autism", "measles", "mmr jab", "mmr vaccine"],
         "reference": "Public guidance summary (WHO/CDC-style) — educational, simplified",
         "text": (
             "The MMR (measles, mumps, rubella) vaccine is safe and effective. Large studies across "
@@ -514,7 +514,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "Paracetamol safe dosing and overdose",
         "source_name": "FDA / MHRA-style",
-        "keywords": ["paracetamol", "overdose", "liver", "dose", "painkiller", "acetaminophen"],
+        "keywords": ["paracetamol", "overdose", "liver", "dose", "paracetamol dose", "acetaminophen"],
         "reference": "Public guidance summary (FDA/MHRA-style) — educational, simplified",
         "text": (
             "For adults, the maximum daily dose of paracetamol is 4 g per day, taken as divided doses. "
@@ -526,7 +526,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "Penicillin allergy",
         "source_name": "NICE",
-        "keywords": ["penicillin", "amoxicillin", "cephalosporin", "rash", "reaction to antibiotic", "penicillin allergy", "allergic to penicillin"],
+        "keywords": ["penicillin", "amoxicillin", "cephalosporin", "penicillin rash", "reaction to antibiotic", "penicillin allergy", "allergic to penicillin"],
         "reference": "Public guidance summary (NICE-style) — educational, simplified",
         "text": (
             "Patients with a confirmed penicillin allergy should avoid penicillin antibiotics. "
@@ -537,7 +537,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "Anaphylaxis emergency treatment",
         "source_name": "WHO / Resuscitation Council-style",
-        "keywords": ["anaphylaxis", "adrenaline", "epipen", "epipen", "throat closing", "swelling", "shock"],
+        "keywords": ["anaphylaxis", "adrenaline", "epipen", "epipen device", "throat closing", "swelling", "shock"],
         "reference": "Public guidance summary (WHO/Resuscitation-style) — educational, simplified",
         "text": (
             "Intramuscular adrenaline (epinephrine) 1:1000 at a dose of 0.5 mg should be administered "
@@ -586,7 +586,7 @@ LIBRARY: list[dict] = [
     {
         "topic": "Healthy pregnancy basics",
         "source_name": "WHO",
-        "keywords": ["pregnancy", "pregnant", "folic", "vitamin", "antenatal", "breastfeeding", "trimester", "baby", "conceive", "miscarriage"],
+        "keywords": ["folic acid", "prenatal vitamin", "antenatal", "breastfeeding", "trimester", "conceive", "miscarriage", "healthy pregnancy", "planning pregnancy", "when pregnant", "while pregnant", "during pregnancy", "in pregnancy", "pregnant women", "pregnant get", "first trimester", "prenatal", "morning sickness", "pregnant and"],
         "reference": "Public guidance summary (WHO-style) — educational, simplified",
         "text": (
             "Women planning pregnancy should take a daily folic acid supplement (400 micrograms) "
@@ -816,7 +816,7 @@ LIBRARY: list[dict] = [
         "topic": "Vaccination basics",
         "generic": True,
         "source_name": "WHO",
-        "keywords": ["vaccine", "vaccines", "vaccination", "immunisation", "immunization", "jab", "booster"],
+        "keywords": ["vaccine", "vaccines", "vaccination", "vaccinated", "immunisation", "immunization", "booster"],
         "reference": "Public guidance summary (WHO-style) — educational, simplified",
         "text": (
             "Vaccines are among the safest and most effective medical tools; routine immunisation "
@@ -871,8 +871,13 @@ def _stem(word: str) -> str:
         return _IRREGULAR[word]
     if word.endswith("ies") and len(word) > 4:
         return word[:-3] + "y"
-    if word.endswith("es") and len(word) > 3:
-        return word[:-2]
+    # "vaccines" -> "vaccine": strip only the trailing 's' so singular/plural
+    # keyword forms collapse to the same stem. (The blanket -es rule mapped
+    # 'vaccines'->'vaccin' while keyword 'vaccine' stayed 'vaccine' — mismatch.)
+    if word.endswith("es") and len(word) > 4 and not word.endswith(
+        ("ses", "zes", "ches", "shes", "xes")
+    ):
+        return word[:-1]
     if word.endswith("s") and not word.endswith("ss") and len(word) > 3:
         return word[:-1]
     return word
