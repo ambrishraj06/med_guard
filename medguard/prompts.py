@@ -3,7 +3,7 @@ MedGuard — prompts.py
 =====================
 The instructions we give the judge LLM (openai/gpt-oss-120b via Groq).
 
-Four prompts, one philosophy:
+Five prompts, one philosophy:
   1. EXTRACTION  — split the answer into atomic claims, INCLUDING the implicit
      safety claims it implies by recommending something for THIS patient.
   2. VERIFICATION — check each claim against the source, read IN the patient's
@@ -11,7 +11,10 @@ Four prompts, one philosophy:
   3. HOLISTIC    — one final whole-answer safety review in the patient's
      context; catches dangers the claim loop misses (e.g. drug interactions
      with medicines mentioned only in the question).
-  4. GENERATION  — grounded answer writing for the Ask & Check mode.
+  4. GENERATION  — grounded answer writing for the RAG student (source-only).
+  5. NAIVE       — un-grounded answer writing for the classroom demo's naive
+     student: a typical AI health chatbot answering from general knowledge.
+     NOT told to hallucinate — behaves like a real un-grounded bot.
 
 Design rules baked into every prompt:
   1. JSON only where we parse JSON; we strip fences in code anyway.

@@ -15,6 +15,9 @@ Defensive engineering rules implemented here (locked decisions D5, D14, D15, D20
   - gpt-oss is a reasoning model: reasoning_effort="low", generous max_tokens,
     and an automatic retry with more tokens if content comes back empty.
   - The API key is read from the environment / Streamlit secrets — never stored.
+  - Two generators share one plain-text pipeline: generate_answer (grounded,
+    source-only) and generate_naive_answer (no source — the classroom demo's
+    un-grounded student). Both use the same retry/backoff defense.
 """
 
 from __future__ import annotations
