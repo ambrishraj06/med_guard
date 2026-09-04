@@ -370,6 +370,31 @@ def generate_answer(
     as the JSON path."""
     client = _get_client(api_key)
     messages = prompts.build_generation_messages(question, source)
+    return _generate_plain_text(client, messages, model=model)
+
+
+def generate_naive_answer(
+    question: str,
+    *,
+    model: str = DEFAULT_JUDGE_MODEL,
+    api_key: str | None = None,
+) -> str:
+    """Generate an answer with NO source text — the classroom demo's "student
+    who didn't study": a typical un-grounded AI health chatbot answering from
+    general knowledge. Same defense plumbing as the grounded path."""
+    client = _get_client(api_key)
+    messages = prompts.build_naive_messages(question)
+    return _generate_plain_text(client, messages, model=model)
+
+
+def _generate_plain_text(
+    client,
+    messages: list[dict],
+    *,
+    model: str,
+) -> str:
+    """Plain-text generation with the same retry/empty-content defense as the
+    JSON path. Shared by the grounded and naive generators."""
     current_max_tokens = BASE_MAX_TOKENS
     last_error: Exception | None = None
 

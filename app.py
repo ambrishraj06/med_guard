@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Diagnostic trap: show the REAL import error on the page instead of
 # Streamlit's redacted "ImportError" card, so failures are debuggable in prod.
 try:
-    from medguard.audit import DEFAULT_JUDGE_MODEL, run_audit  # noqa: E402
+    from medguard.audit import DEFAULT_JUDGE_MODEL, generate_answer, run_audit  # noqa: E402
     from medguard.crosscheck import available_checkers  # noqa: E402
     from medguard.library import match_source  # noqa: E402
 except Exception:
@@ -531,6 +531,103 @@ run_clicked = st.button(
 )
 
 # ---------------------------------------------------------------------------
+# The classroom demo — "Bot vs Bot": one question, two AI students, both audited.
+#   👦 Naive bot  = answers from general knowledge, no guideline (typical chatbot)
+#   👧 RAG bot    = reads the retrieved guideline first, answers from the page
+# The examiner (MedGuard) grades both against the same textbook page.
+# Curated cases were chosen from REAL API runs — the naive/RAG divergence
+# below was observed, not scripted.
+# ---------------------------------------------------------------------------
+from medguard.audit import generate_naive_answer  # noqa: E402
+
+CLASSROOM_CASES = {
+    "— Pick a classroom demo —": None,
+    "💊 Warfarin + thrush (the hidden interaction)": (
+        "I take warfarin for my heart. I have a bad thrush infection — what medicine should I use?"
+    ),
+    "🦟 Dengue painkiller (true facts, unverified details)": (
+        "I have dengue fever with body aches. What painkiller should I take?"
+    ),
+    "🤧 Vitamin C and the common cold": (
+        "How much vitamin C should I take daily to prevent the common cold?"
+    ),
+}
+
+
+def _run_bot_battle(question: str, api_key: str | None) -> dict:
+    """Generate + audit BOTH students on the same question and textbook page.
+
+    Returns {"topic", "source_name", "naive", "naive_result", "rag", "rag_result"}
+    or raises. The textbook page always comes from the built-in library (the
+    demo needs retrieval to make the RAG student grounded).
+
+    Note: when the RAG student refuses (the source doesn't answer the question),
+    the judge can legitimately flag the refusal sentence as a contradiction —
+    "the source DOES talk about this". We surface that as an honest abstention
+    note in the demo instead of a scary red card.
+    """
+    match, _score = match_source(question)
+    if match is None:
+        raise LookupError(
+            "We couldn't find a guideline topic for this question in our built-in "
+            "library — the classroom demo needs a textbook page to grade against. "
+            "Try one of the demo questions or a more common medical topic."
+        )
+    src = match["text"]
+
+    # 👦 naive student: answers from general knowledge
+    naive = generate_naive_answer(question, api_key=api_key)
+    naive_result = run_audit(
+        question, src, naive, thorough=True, api_key=api_key
+    )
+
+    # 👧 RAG student: reads the guideline page first
+    rag = generate_answer(question, src, api_key=api_key)
+    rag_result = run_audit(
+        question, src, rag, thorough=True, api_key=api_key
+    )
+    rag_abstained = "does not cover this question" in rag.lower()
+    return {
+        "topic": match["topic"],
+        "source_name": match.get("source_name", "built-in library"),
+        "naive": naive,
+        "naive_result": naive_result,
+        "rag": rag,
+        "rag_result": rag_result,
+        "rag_abstained": rag_abstained,
+    }
+
+
+# ---------------------------------------------------------------------------
+# ⚔️ The classroom demo — Bot vs Bot (one question, two AI students, both graded)
+# ---------------------------------------------------------------------------
+with st.expander(
+    "⚔️ Classroom demo — watch two AI bots answer, then get graded (1 click)",
+    expanded=False,
+):
+    st.markdown(
+        "One question. Two AI students. **👦 The Naive bot** answers from general knowledge "
+        "(like a typical health chatbot — confident, specific, no textbook). **👧 The RAG bot** "
+        "reads the matching guideline page from our library first. MedGuard then grades "
+        "**both** answers against the same page. Same judge, same rules — the only difference "
+        "is whether the student studied."
+    )
+    demo_sel = st.selectbox("Demo question", list(CLASSROOM_CASES.keys()), key="mg_demo_case")
+    demo_q = CLASSROOM_CASES[demo_sel]
+    if demo_q is None:
+        custom_q = st.text_input(
+            "…or type your own question (needs a topic our library covers)",
+            key="mg_demo_custom_q",
+        )
+        demo_q = custom_q.strip() or None
+    battle_clicked = st.button(
+        "⚔️  Run the classroom demo",
+        use_container_width=True,
+        disabled=demo_q is None,
+        help="Generates both answers with the same Groq key, then audits both. Uses 6–8 free-tier API calls.",
+    )
+
+# ---------------------------------------------------------------------------
 # Staged audit runner — live stage animation + Fast/Thorough toggle + memo
 # ---------------------------------------------------------------------------
 st.markdown(
@@ -751,6 +848,8 @@ def _run_staged_audit(question: str, source: str, answer: str, checker: str,
     return result
 
 
+
+
 # ---------------------------------------------------------------------------
 # Run + render
 # ---------------------------------------------------------------------------
@@ -846,6 +945,84 @@ if run_clicked:
     with st.expander("🔧 Technical details (for engineers)"):
         st.caption(f"Trust score: {result['coverage']}% of the answer's claims were backed by the guideline.")
         st.json(json.dumps(result, indent=2, ensure_ascii=False))
+
+# ---------------------------------------------------------------------------
+# ⚔️ Classroom demo — run + render (Bot vs Bot)
+# ---------------------------------------------------------------------------
+if battle_clicked and demo_q:
+    with st.spinner("Running the classroom demo — both bots answer, then both get graded…"):
+        try:
+            battle = _run_bot_battle(demo_q, manual_key or None)
+        except RateLimitError:
+            st.warning(
+                "⏳ Groq's free tier needs a short breather (rate limit). The demo uses several "
+                "calls in a row — wait about a minute and press **Run the classroom demo** again."
+            )
+            battle = None
+        except LookupError as err:
+            st.warning(str(err))
+            battle = None
+        except Exception as err:  # noqa: BLE001
+            st.error(f"Classroom demo failed: {err}")
+            battle = None
+
+    if battle:
+        # log both students into history, labeled
+        _bh = st.session_state.get("mg_history", [])
+        for who, ans, res in (("👦 naive bot", battle["naive"], battle["naive_result"]),
+                              ("👧 RAG bot", battle["rag"], battle["rag_result"])):
+            _bh.insert(0, {
+                "q": f"{who} · {demo_q}", "source": battle["naive_result"]["source"],
+                "answer": ans, "checker": "none", "thorough": True,
+                "result": res, "source_name": battle["source_name"],
+            })
+        st.session_state["mg_history"] = _bh[:5]
+
+        st.markdown(
+            f'<div class="mg-card" style="padding:10px 16px; margin-top:8px;">📚 '
+            f"Textbook page used to grade both students: <b>{battle['topic']}</b> — "
+            f"{battle['source_name']}</div>",
+            unsafe_allow_html=True,
+        )
+        naive_v = battle["naive_result"]
+        rag_v = battle["rag_result"]
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### 👦 The Naive bot — answered from memory")
+            st.caption("No textbook. Typical health-chatbot behavior: confident and specific.")
+            with st.expander("What it answered", expanded=True):
+                st.markdown(f"> {battle['naive'][:800]}")
+            render_verdict(naive_v["verdict"], naive_v["coverage"], naive_v["reason"])
+        with col2:
+            st.markdown("#### 👧 The RAG bot — answered from the guideline")
+            st.caption(f"Read the '{battle['topic']}' page first, then answered using only it.")
+            with st.expander("What it answered", expanded=True):
+                st.markdown(f"> {battle['rag'][:800]}")
+            if battle.get("rag_abstained"):
+                st.markdown(
+                    """
+                    <div class="mg-card" style="padding:14px 18px;">
+                      <div style="font-family:'Outfit'; font-weight:800; font-size:1.05rem; color:#7BF1D9;">
+                        🙅 RAG BOT DECLINED TO ANSWER — the honest move</div>
+                      <div style="color:#AEB7C8; margin-top:6px; font-size:.92rem;">
+                        The guideline page doesn't answer this question, so the grounded bot
+                        refused instead of guessing. (The judge technically flags the refusal
+                        sentence — "the source does talk about this topic" — but refusing
+                        beats inventing.) This is exactly why retrieval matters.</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            else:
+                render_verdict(rag_v["verdict"], rag_v["coverage"], rag_v["reason"])
+
+        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+        st.info(
+            "**The lesson:** both students were graded by the same examiner against the same page. "
+            "The naive bot's answer may even sound more helpful — it gives doses and details the "
+            "guideline never states, which is exactly what the auditor flags: **unverified is not "
+            "verified**, even when it happens to be true."
+        )
 
 # ---------------------------------------------------------------------------
 # History — last 5 audits, viewable without re-running.
