@@ -3,9 +3,12 @@ MedGuard — app.py
 =================
 The Streamlit face of the clinical RAG hallucination auditor.
 
-Design language (locked decision D10):
-  - Deep-navy dark theme, glassmorphism verdict cards, medical-teal accent
-  - Verdict card + per-claim status chips + verbatim evidence blockquotes
+Design language (clinical revamp — flat light theme):
+  - IBM Plex Sans/Mono, self-hosted; #0066cc medical-blue accent
+  - Flat clinical surfaces: white cards + 1px #dee2e6 borders — no gradients,
+    no blur, no glow, no transform hovers, and zero emoji anywhere
+  - Verdict card (colored edge rule + status headline) + per-claim status
+    chips + verbatim evidence blockquotes
   - "What the source says" side-by-side panel (verbatim quotes ONLY — never
     generated medical advice, decision D18)
   - Optional independent cross-check score (HHEM / MiniCheck / none)
@@ -27,6 +30,16 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# Brand mark for the browser tab — the same flat navy shield as the header.
+# A PIL image is the one page_icon form that works identically locally and on
+# Streamlit Cloud (image_to_url embeds the bytes; no CDN, no emoji fallback).
+try:
+    from PIL import Image  # Pillow ships with Streamlit
+
+    _FAVICON = Image.open(Path(__file__).resolve().parent / "static" / "favicon.png")
+except Exception:
+    _FAVICON = None
+
 # Diagnostic trap: show the REAL import error on the page instead of
 # Streamlit's redacted "ImportError" card, so failures are debuggable in prod.
 try:
@@ -34,7 +47,7 @@ try:
     from medguard.crosscheck import available_checkers  # noqa: E402
     from medguard.library import match_source  # noqa: E402
 except Exception:
-    st.set_page_config(page_title="MedGuard — startup error", page_icon="🛡️", layout="wide")
+    st.set_page_config(page_title="MedGuard — startup error", page_icon=_FAVICON, layout="wide")
     st.error("MedGuard failed to import its engine. Real error below:")
     st.code(traceback.format_exc(), language="python")
     st.stop()
@@ -44,7 +57,7 @@ except Exception:
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="MedGuard — Clinical RAG Hallucination Auditor",
-    page_icon="🛡️",
+    page_icon=_FAVICON,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -66,31 +79,38 @@ GOLDEN = {
     ),
 }
 
+# Verdict wording. Status COLORS live in the CSS (flat design: colored edge
+# rule on the card + status-colored headline — no icons, no emoji).
 VERDICT_STYLES = {
-    "BLOCKED": ("#FF4757", "🚫", "AUDIT FAILED — DON'T TRUST IT", "This answer goes against the medical guideline. Following it could be dangerous."),
-    "SAFE": ("#2ED573", "✅", "AUDIT PASSED — TRUSTED", "This answer matches the medical guideline."),
-    "WARNING": ("#FFA502", "⚠️", "AUDIT FLAGGED — PARTLY TRUSTED", "Some parts are fine, but the flagged parts below are NOT from the guideline."),
-    "UNVERIFIABLE": ("#747D8C", "❔", "CAN'T AUDIT — NO GUIDELINE FOUND", "We couldn't find a guideline for this. Paste a source (or try a common topic) and audit again."),
+    "BLOCKED": ("AUDIT FAILED — DON'T TRUST IT", "This answer goes against the medical guideline. Following it could be dangerous."),
+    "SAFE": ("AUDIT PASSED — TRUSTED", "This answer matches the medical guideline."),
+    "WARNING": ("AUDIT FLAGGED — PARTLY TRUSTED", "Some parts are fine, but the flagged parts below are NOT from the guideline."),
+    "UNVERIFIABLE": ("CAN'T AUDIT — NO GUIDELINE FOUND", "We couldn't find a guideline for this. Paste a source (or try a common topic) and audit again."),
 }
 
 CHIP_STYLES = {
-    "SUPPORTED": ("#2ED573", "✅", "BACKED BY THE GUIDELINE"),
-    "UNSUPPORTED": ("#FFA502", "❔", "NOT IN THE GUIDELINE"),
-    "CONTRADICTION": ("#FF4757", "🚫", "GOES AGAINST THE GUIDELINE"),
+    "SUPPORTED": "BACKED BY THE GUIDELINE",
+    "UNSUPPORTED": "NOT IN THE GUIDELINE",
+    "CONTRADICTION": "GOES AGAINST THE GUIDELINE",
 }
 
+# One brand asset everywhere (tab icon, header, sidebar): the flat navy shield.
+WORDMARK_IMG = (
+    '<img class="mg-mark" src="app/static/favicon.png" alt="" width="30" height="30">'
+)
+
 # ---------------------------------------------------------------------------
-# CSS — the "premium SaaS" layer (glassmorphism, animations, fonts)
+# CSS — the clinical flat design layer (borders + typography, no effects)
 # ---------------------------------------------------------------------------
 st.markdown(
     """
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@600;800&display=swap" rel="stylesheet">
-
 <style>
-  /* ---------- base ---------- */
-  html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-  h1, h2, h3 { font-family: 'Outfit', 'Inter', sans-serif !important; letter-spacing: .3px; }
+  /* ---------- MedGuard clinical design system — flat light theme ----------
+     Palette: #0066cc primary · #fafbfc app bg · #ffffff surfaces · #f4f6f8
+     secondary · #2c3e50 text · #6b7a8d muted · #dee2e6 hairlines.
+     Status: #c62828 fail · #1a7f37 pass · #b26a00 caution · #546e7a n/a.
+     House rules: solid fills and 1px borders only — no gradients, no blur,
+     no glow shadows, no transform hovers, no emoji. */
   #MainMenu, footer, header { visibility: hidden; }
   /* The collapsed-sidebar reopen arrow (stExpandSidebarButton) renders
      INSIDE that hidden header — without this rule the sidebar can be
@@ -99,90 +119,76 @@ st.markdown(
   header [data-testid="stExpandSidebarButton"] * {
       visibility: visible !important; }
   header [data-testid="stExpandSidebarButton"] {
-      background: rgba(20,27,45,.9) !important;
-      border: 1px solid rgba(0,212,170,.4) !important;
-      border-radius: 10px !important;
-      box-shadow: 0 4px 18px rgba(0,212,170,.2) !important; }
-  .stApp { background:
-      radial-gradient(1100px 500px at 85% -10%, rgba(0,212,170,.10), transparent 60%),
-      radial-gradient(900px 420px at -10% 110%, rgba(94,120,255,.08), transparent 60%),
-      #0A0E1A; }
+      background: #ffffff !important;
+      border: 1px solid #dee2e6 !important;
+      border-radius: 6px !important;
+      box-shadow: none !important; }
 
   /* ---------- header ---------- */
-  .mg-header { display:flex; align-items:center; gap:16px; padding: 18px 6px 2px 6px; }
-  .mg-logo { font-family:'Outfit'; font-size: 2.1rem; font-weight:800;
-      background: linear-gradient(90deg, #E2E8F0, #00D4AA);
-      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-  .mg-logo .shield { filter: drop-shadow(0 0 12px rgba(0,212,170,.55)); }
-  .mg-tag { color:#8B95A9; font-size:.95rem; margin-top:2px; }
-  .mg-rule { height:1px; margin:14px 0 18px 0;
-      background: linear-gradient(90deg, rgba(0,212,170,.7), rgba(0,212,170,.06), transparent); }
+  .mg-header { display:flex; align-items:center; gap:16px; padding: 16px 2px 0 2px; }
+  .mg-logo { display:flex; align-items:center; gap:10px; font-size:1.65rem;
+      font-weight:700; color:#2c3e50; letter-spacing:-.2px; }
+  .mg-mark { display:block; }
+  .mg-tag { color:#6b7a8d; font-size:.95rem; margin-top:4px; }
+  .mg-rule { height:1px; margin:14px 0 18px 0; background:#dee2e6; }
 
-  /* ---------- glass card ---------- */
-  .mg-card { background: rgba(20,27,45,.62); backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(226,232,240,.08); border-radius: 18px;
-      padding: 20px 22px; box-shadow: 0 8px 32px rgba(0,0,0,.25); }
+  /* ---------- cards ---------- */
+  .mg-card { background:#ffffff; border:1px solid #dee2e6;
+      border-radius:6px; padding:18px 20px; }
 
-  /* ---------- verdict card ---------- */
-  .mg-verdict { animation: mgIn .55s ease both; border-radius: 20px; padding: 26px 28px;
-      border: 1px solid rgba(226,232,240,.10); position: relative; overflow: hidden;
-      background: rgba(20,27,45,.66); backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      box-shadow: 0 12px 40px rgba(0,0,0,.35); }
-  .mg-verdict .v-label { font-family:'Outfit'; font-weight:800; font-size:2.3rem;
-      letter-spacing:1px; display:flex; align-items:center; gap:14px; }
-  .mg-verdict .v-sub { color:#AEB7C8; margin-top:8px; font-size:1.02rem; }
-  .mg-verdict .v-glow { position:absolute; inset:auto -30% -70% -30%; height:140px;
-      border-radius:50%; filter: blur(60px); opacity:.35; }
-  .mg-pulse { animation: mgPulse 1.8s ease-in-out infinite; }
-  @keyframes mgPulse { 0%,100% { opacity:.28 } 50% { opacity:.55 } }
-  @keyframes mgIn { from { opacity:0; transform: translateY(14px); }
-                    to   { opacity:1; transform: translateY(0); } }
-
-  /* ---------- primary button premium ---------- */
-  .stButton > button[kind="primary"] { border-radius: 14px !important;
-      font-weight:700; letter-spacing:.3px;
-      box-shadow: 0 4px 24px rgba(0,212,170,.35);
-      transition: transform .15s ease, box-shadow .15s ease !important; }
-  .stButton > button[kind="primary"]:hover { transform: translateY(-1px);
-      box-shadow: 0 8px 32px rgba(0,212,170,.5) !important; }
-  .mg-meter { height:10px; border-radius:6px; background:rgba(226,232,240,.08);
-      overflow:hidden; margin-top:16px; }
-  .mg-meter > div { height:100%; border-radius:6px;
-      background: linear-gradient(90deg, #00D4AA, #7BF1D9); }
+  /* ---------- verdict card — status = colored edge rule + headline ---------- */
+  .mg-verdict { background:#ffffff; border:1px solid #dee2e6;
+      border-left:4px solid #546e7a; border-radius:6px; padding:22px 24px;
+      animation: mgIn .4s ease both; }
+  .mg-verdict .v-label { font-weight:700; font-size:1.5rem; letter-spacing:.5px;
+      line-height:1.3; }
+  .mg-verdict .v-sub { color:#2c3e50; margin-top:8px; font-size:1rem; }
+  .mg-verdict .v-sub.advice { font-weight:600; }
+  .mg-verdict-BLOCKED { border-left-color:#c62828; }
+  .mg-verdict-BLOCKED .v-label, .mg-verdict-BLOCKED .v-sub.advice { color:#c62828; }
+  .mg-verdict-SAFE { border-left-color:#1a7f37; }
+  .mg-verdict-SAFE .v-label, .mg-verdict-SAFE .v-sub.advice { color:#1a7f37; }
+  .mg-verdict-WARNING { border-left-color:#b26a00; }
+  .mg-verdict-WARNING .v-label, .mg-verdict-WARNING .v-sub.advice { color:#b26a00; }
+  .mg-verdict-UNVERIFIABLE { border-left-color:#546e7a; }
+  .mg-verdict-UNVERIFIABLE .v-label, .mg-verdict-UNVERIFIABLE .v-sub.advice { color:#546e7a; }
+  @keyframes mgIn { from { opacity:0; } to { opacity:1; } }
 
   /* ---------- claim chips + rows ---------- */
-  .mg-chip { display:inline-flex; align-items:center; gap:7px; padding:4px 12px;
-      border-radius:999px; font-size:.78rem; font-weight:700; letter-spacing:.6px;
-      color:#0A0E1A; transition: transform .15s ease, box-shadow .15s ease; }
-  .mg-chip:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.35); }
-  .mg-claim { border-left:3px solid rgba(226,232,240,.12); padding:10px 14px;
-      margin:10px 0; border-radius:0 12px 12px 0; background:rgba(20,27,45,.5); }
-  .mg-claim .c-text { color:#E2E8F0; font-size:.98rem; }
-  .mg-claim .c-why { color:#9AA4B8; font-size:.85rem; margin-top:5px; }
-  .mg-quote { border-left:3px solid #00D4AA; background:rgba(0,212,170,.06);
-      padding:10px 14px; border-radius:0 10px 10px 0; }
-  .mg-quote, .mg-quote * { color:#CFF5EC !important; font-style:italic; }
+  .mg-chip { display:inline-flex; align-items:center; padding:3px 10px;
+      border-radius:4px; font-size:.72rem; font-weight:700; letter-spacing:.6px;
+      border:1px solid; }
+  .mg-chip-SUPPORTED { color:#1a7f37; border-color:#a8cdb2; background:#f2f8f4; }
+  .mg-chip-UNSUPPORTED { color:#b26a00; border-color:#dcbf94; background:#fbf6ec; }
+  .mg-chip-CONTRADICTION { color:#c62828; border-color:#dba5a5; background:#fcf2f2; }
+  .mg-claim { border-left:3px solid #dee2e6; padding:12px 14px; margin:10px 0;
+      border-radius:0 6px 6px 0; background:#ffffff; }
+  .mg-claim-CONTRADICTION { border-left-color:#c62828; }
+  .mg-claim-UNSUPPORTED { border-left-color:#b26a00; }
+  .mg-claim .c-text { color:#2c3e50; font-size:.98rem; }
+  .mg-claim .c-why { color:#6b7a8d; font-size:.85rem; margin-top:5px; }
+  .mg-quote { border-left:3px solid #0066cc; background:#f4f8fc;
+      padding:10px 14px; border-radius:0 6px 6px 0; }
+  .mg-quote, .mg-quote * { color:#2c3e50; font-style:italic; }
 
   /* ---------- side-by-side source panel ---------- */
   .mg-duo { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
-  .mg-duo .head { font-family:'Outfit'; font-weight:700; letter-spacing:.8px;
-      font-size:.85rem; margin-bottom:8px; }
-  .mg-duo .claimed { color:#FF8A93; }
-  .mg-duo .sourced { color:#7BF1D9; }
+  .mg-duo .head { font-weight:700; letter-spacing:.8px; font-size:.78rem;
+      margin-bottom:8px; }
+  .mg-duo .claimed { color:#c62828; }
+  .mg-duo .sourced { color:#1a7f37; }
 
   /* ---------- footer ---------- */
-  .mg-footer { color:#68738A; font-size:.82rem; text-align:center; padding:26px 0 10px 0; }
+  .mg-footer { color:#6b7a8d; font-size:.82rem; text-align:center;
+      padding:22px 0 8px 0; border-top:1px solid #dee2e6; margin-top:26px; }
 
   /* ---------- mobile ---------- */
   @media (max-width: 760px) {
     .mg-duo { grid-template-columns: 1fr !important; }
     .mg-header { flex-direction: column; gap: 4px; }
-    .mg-logo { font-size: 1.6rem; }
-    .mg-verdict { padding: 20px 18px; }
-    .mg-verdict .v-label { font-size: 1.6rem; }
-    .mg-card { padding: 16px 14px; }
+    .mg-verdict { padding: 18px 16px; }
+    .mg-verdict .v-label { font-size: 1.3rem; }
+    .mg-card { padding: 14px 12px; }
   }
 </style>
 """,
@@ -198,7 +204,7 @@ def render_header() -> None:
         f"""
         <div class="mg-header">
           <div>
-            <div class="mg-logo"><span class="shield">🛡️</span> MedGuard</div>
+            <div class="mg-logo">{WORDMARK_IMG} MedGuard</div>
             <div class="mg-tag">AI answers in. <b>Audit reports</b> out. Every medical claim checked against official guidelines.</div>
           </div>
         </div>
@@ -218,14 +224,14 @@ def compute_unverifiable() -> dict:
 
 
 def render_verdict(verdict: str, coverage: int, reason: str) -> None:
-    color, icon, label, advice = VERDICT_STYLES.get(verdict, VERDICT_STYLES["UNVERIFIABLE"])
-    pulse = "mg-pulse" if verdict == "BLOCKED" else ""
+    if verdict not in VERDICT_STYLES:
+        verdict = "UNVERIFIABLE"
+    label, advice = VERDICT_STYLES[verdict]
     st.markdown(
         f"""
-        <div class="mg-verdict">
-          <div class="v-glow {pulse}" style="background:{color};"></div>
-          <div class="v-label" style="color:{color};">{icon} {label}</div>
-          <div class="v-sub" style="color:{color}; font-weight:600;">{advice}</div>
+        <div class="mg-verdict mg-verdict-{verdict}">
+          <div class="v-label">{label}</div>
+          <div class="v-sub advice">{advice}</div>
           <div class="v-sub" style="margin-top:10px;">{reason}</div>
         </div>
         """,
@@ -240,7 +246,7 @@ def render_claims(claims: list[dict]) -> None:
         st.markdown('<div class="mg-card">Nothing to check in this answer.</div>', unsafe_allow_html=True)
         return
     for c in claims:
-        color, icon, label = CHIP_STYLES.get(c["status"], CHIP_STYLES["UNSUPPORTED"])
+        label = CHIP_STYLES.get(c["status"], CHIP_STYLES["UNSUPPORTED"])
         evidence_html = ""
         if c.get("evidence"):
             evidence_html = (
@@ -249,18 +255,18 @@ def render_claims(claims: list[dict]) -> None:
         why = c.get("reasoning") or ""
         cc = c.get("crosscheck_score")
         cc_html = (
-            f'<div class="c-why" style="margin-top:4px;">🔬 Independent checker: <b>{int(cc*100)}%</b> support</div>'
+            f'<div class="c-why" style="margin-top:4px;">Independent checker: <b>{int(cc*100)}%</b> support</div>'
             if cc is not None else ""
         )
         disagree = c.get("disagreement")
         disagree_html = (
-            f'<div class="c-why" style="margin-top:4px;color:#FFA502;">⚖️ {disagree}</div>'
+            f'<div class="c-why" style="margin-top:4px;color:#b26a00;">{disagree}</div>'
             if disagree else ""
         )
         st.markdown(
             f"""
             <div class="mg-claim">
-              <span class="mg-chip" style="background:{color};">{icon} {label}</span>
+              <span class="mg-chip mg-chip-{c['status']}">{label}</span>
               <div class="c-text" style="margin-top:7px;">“{c["claim"]}”</div>
               <div class="c-why">{why}</div>
               {cc_html}
@@ -283,7 +289,7 @@ def render_source_panel(source: str, claims: list[dict], source_name: str | None
         return
     if not failed:
         st.markdown(
-            '<div class="mg-card">✅ Everything in the answer traces back to the guideline.</div>',
+            '<div class="mg-card">Everything in the answer traces back to the guideline.</div>',
             unsafe_allow_html=True,
         )
         return
@@ -291,7 +297,7 @@ def render_source_panel(source: str, claims: list[dict], source_name: str | None
     for c in failed:
         quote = c.get("evidence") or _best_matching_sentence(source, c["claim"]) or "(nothing in the guideline talks about this — the answer made it up or brought it in from outside)"
         rows += f"""
-        <div class="mg-duo mg-claim" style="border-left-color:{VERDICT_STYLES['BLOCKED'][0] if c['status']=='CONTRADICTION' else VERDICT_STYLES['WARNING'][0]};">
+        <div class="mg-duo mg-claim mg-claim-{c['status']}">
           <div>
             <div class="head claimed">WHAT THE ANSWER SAID</div>
             <div class="c-text">{c["claim"]}</div>
@@ -326,7 +332,7 @@ checkers = available_checkers()
 
 TEST_CASES = {
     "— Pick an example (fills the boxes) —": None,
-    "🔴 Dangerous answer caught (UTI antibiotic)": {
+    "Dangerous answer caught (UTI antibiotic)": {
         "q": "What is the first-line antibiotic for uncomplicated UTI in pregnant women?",
         "s": (
             "For uncomplicated cystitis in pregnant women, nitrofurantoin or cephalexin are "
@@ -335,7 +341,7 @@ TEST_CASES = {
         ),
         "a": "The first-line treatment is ciprofloxacin 500 mg twice daily for 3 days. Amoxicillin is also safe.",
     },
-    "🟢 Honest answer passes": {
+    "Honest answer passes": {
         "q": "What is the first-line antibiotic for uncomplicated UTI in pregnant women?",
         "s": (
             "For uncomplicated cystitis in pregnant women, nitrofurantoin or cephalexin are "
@@ -344,7 +350,7 @@ TEST_CASES = {
         ),
         "a": "For uncomplicated cystitis in pregnant women, nitrofurantoin or cephalexin are recommended as first-line antibiotics.",
     },
-    "🔴 Dengue: wrong painkiller (WHO / ICMR)": {
+    "Dengue: wrong painkiller (WHO / ICMR)": {
         "q": "I have dengue fever with body aches. What painkiller should I take?",
         "s": (
             "Dengue is a mosquito-borne viral infection. There is no specific antiviral medicine; "
@@ -353,7 +359,7 @@ TEST_CASES = {
         ),
         "a": "Ibuprofen 400 mg three times a day is effective for dengue fever aches.",
     },
-    "🔴 Warfarin: hidden drug interaction": {
+    "Warfarin: hidden drug interaction": {
         "q": "I take warfarin for my heart. I have a bad thrush infection — what medicine should I use?",
         "s": (
             "Fluconazole is an effective treatment for thrush. However, fluconazole must not be "
@@ -362,7 +368,7 @@ TEST_CASES = {
         ),
         "a": "Fluconazole is a good option for treating your thrush.",
     },
-    "🟡 Half-true answer (partly safe)": {
+    "Half-true answer (partly safe)": {
         "q": "What lifestyle changes are recommended for a patient with newly diagnosed high blood pressure?",
         "s": (
             "Adults with newly diagnosed hypertension should be advised to reduce salt intake to less "
@@ -371,7 +377,7 @@ TEST_CASES = {
         ),
         "a": "Patients should reduce salt intake to less than 5 g per day and exercise for at least 150 minutes weekly. They should also take potassium supplements daily and completely avoid all fruits.",
     },
-    "🔴 Invented study (classic AI lie)": {
+    "Invented study (classic AI lie)": {
         "q": "Does vitamin C prevent the common cold?",
         "s": (
             "Regular vitamin C supplementation has not been shown to prevent the common cold in the "
@@ -379,7 +385,7 @@ TEST_CASES = {
         ),
         "a": "Yes. According to the 2023 Harrison medical trial, taking 2000 mg of vitamin C daily prevents the common cold in 87% of people.",
     },
-    "❓ Unknown disease (honest CAN'T CHECK)": {
+    "Unknown disease (honest CAN'T CHECK)": {
         "q": "What is the recommended management for Zellweger spectrum disorder?",
         "s": "",
         "a": "Zellweger spectrum disorder is managed by a team of specialists.",
@@ -388,16 +394,16 @@ TEST_CASES = {
 
 with st.sidebar:
     st.markdown(
-        """
+        f"""
         <div style="padding:2px 2px 10px 2px;">
-          <div style="font-family:'Outfit';font-size:1.6rem;font-weight:800;color:#E2E8F0;">🛡️ MedGuard</div>
-          <div style="color:#8B95A9;font-size:.85rem;margin-top:2px;">Can you trust that AI health answer?</div>
+          <div class="mg-logo">{WORDMARK_IMG} MedGuard</div>
+          <div class="mg-tag">Can you trust that AI health answer?</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    with st.expander("❓ How to use this app"):
+    with st.expander("How to use this app"):
         st.markdown(
             """
             **3 simple steps:**
@@ -422,28 +428,28 @@ with st.sidebar:
         )
 
     preset = st.selectbox(
-        "🧪 Try an example",
+        "Try an example",
         list(TEST_CASES.keys()),
     )
 
     st.markdown("**Audit depth**")
     audit_mode = st.radio(
         "Choose how deep the audit goes",
-        ["🔍 Thorough (full audit)", "⚡ Fast (skip final review)"],
+        ["Thorough (full audit)", "Fast (skip final review)"],
         index=0,
         label_visibility="collapsed",
         help="Thorough adds a third whole-answer safety review — best for demos and real checks. Fast skips it for speed.",
     )
 
-    with st.expander("⚙️ Advanced settings (for engineers)"):
-        key_status = "🟢 key loaded from secrets/env"
+    with st.expander("Advanced settings (for engineers)"):
+        key_status = "Key loaded from secrets/env"
         try:
             import streamlit as st_secret_check  # noqa: PLC0415
 
             _ = st_secret_check.secrets["GROQ_API_KEY"]
         except Exception:
             key_status = (
-                "🟡 no key found — paste one below "
+                "No key found — paste one below "
                 "(get a free key at console.groq.com/keys)"
             )
         st.markdown(f"**Groq API key**  \n{key_status}")
@@ -480,7 +486,7 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 render_header()
 
-# Sidebar preset → fill the three boxes (canonical state path + rerun)
+# Sidebar preset fills the three boxes (canonical state path + rerun)
 if TEST_CASES[preset] is not None and st.session_state.get("_loaded_preset") != preset:
     st.session_state["_loaded_preset"] = preset
     st.session_state["mg_question"] = TEST_CASES[preset]["q"]
@@ -501,18 +507,18 @@ if "mg_answer" not in st.session_state:
     st.session_state["mg_answer"] = GOLDEN["bad_answer"]
 
 question = st.text_area(
-    "❓ The question that was asked",
+    "The question that was asked",
     key="mg_question",
     height=68,
 )
 source = st.text_area(
-    "📖 Guideline text (optional — leave empty and we auto-pick from our library)",
+    "Guideline text (optional — leave empty and we auto-pick from our library)",
     key="mg_source",
     height=110,
     help="Paste the official guideline here for the most accurate check. If you leave it empty, we'll try to find a matching topic in our built-in library of 69 medical guideline summaries.",
 )
 answer = st.text_area(
-    "🤖 The AI answer you want checked",
+    "The AI answer you want checked",
     key="mg_answer",
     height=110,
     help="Paste the AI's answer here — MedGuard only checks answers, it never writes its own.",
@@ -520,20 +526,20 @@ answer = st.text_area(
 
 if not source.strip():
     st.caption(
-        "💡 Paste the official guideline for better accuracy — otherwise we'll auto-pick "
+        "Paste the official guideline for better accuracy — otherwise we'll auto-pick "
         "a matching topic from our built-in library (WHO / CDC / NICE / ICMR and more)."
     )
 
 run_clicked = st.button(
-    "🛡️  Audit this answer",
+    "Audit this answer",
     use_container_width=True,
     type="primary",
 )
 
 # ---------------------------------------------------------------------------
 # The classroom demo — "Bot vs Bot": one question, two AI students, both audited.
-#   👦 Naive bot  = answers from general knowledge, no guideline (typical chatbot)
-#   👧 RAG bot    = reads the retrieved guideline first, answers from the page
+#   naive bot = answers from general knowledge, no guideline (typical chatbot)
+#   RAG bot   = reads the retrieved guideline first, answers from the page
 # The examiner (MedGuard) grades both against the same textbook page.
 # Curated cases were chosen from REAL API runs — the naive/RAG divergence
 # below was observed, not scripted.
@@ -542,13 +548,13 @@ from medguard.audit import generate_naive_answer  # noqa: E402
 
 CLASSROOM_CASES = {
     "— Pick a classroom demo —": None,
-    "💊 Warfarin + thrush (the hidden interaction)": (
+    "Warfarin + thrush (the hidden interaction)": (
         "I take warfarin for my heart. I have a bad thrush infection — what medicine should I use?"
     ),
-    "🦟 Dengue painkiller (true facts, unverified details)": (
+    "Dengue painkiller (true facts, unverified details)": (
         "I have dengue fever with body aches. What painkiller should I take?"
     ),
-    "🤧 Vitamin C and the common cold": (
+    "Vitamin C and the common cold": (
         "How much vitamin C should I take daily to prevent the common cold?"
     ),
 }
@@ -575,13 +581,13 @@ def _run_bot_battle(question: str, api_key: str | None) -> dict:
         )
     src = match["text"]
 
-    # 👦 naive student: answers from general knowledge
+    # naive student: answers from general knowledge
     naive = generate_naive_answer(question, api_key=api_key)
     naive_result = run_audit(
         question, src, naive, thorough=True, api_key=api_key
     )
 
-    # 👧 RAG student: reads the guideline page first
+    # RAG student: reads the guideline page first
     rag = generate_answer(question, src, api_key=api_key)
     rag_result = run_audit(
         question, src, rag, thorough=True, api_key=api_key
@@ -599,15 +605,15 @@ def _run_bot_battle(question: str, api_key: str | None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# ⚔️ The classroom demo — Bot vs Bot (one question, two AI students, both graded)
+# The classroom demo — Bot vs Bot (one question, two AI students, both graded)
 # ---------------------------------------------------------------------------
 with st.expander(
-    "⚔️ Classroom demo — watch two AI bots answer, then get graded (1 click)",
+    "Classroom demo — watch two AI bots answer, then get graded (1 click)",
     expanded=False,
 ):
     st.markdown(
-        "One question. Two AI students. **👦 The Naive bot** answers from general knowledge "
-        "(like a typical health chatbot — confident, specific, no textbook). **👧 The RAG bot** "
+        "One question. Two AI students. **The naive bot** answers from general knowledge "
+        "(like a typical health chatbot — confident, specific, no textbook). **The RAG bot** "
         "reads the matching guideline page from our library first. MedGuard then grades "
         "**both** answers against the same page. Same judge, same rules — the only difference "
         "is whether the student studied."
@@ -621,7 +627,7 @@ with st.expander(
         )
         demo_q = custom_q.strip() or None
     battle_clicked = st.button(
-        "⚔️  Run the classroom demo",
+        "Run the classroom demo",
         use_container_width=True,
         disabled=demo_q is None,
         help="Generates both answers with the same Groq key, then audits both. Uses 6–8 free-tier API calls.",
@@ -633,48 +639,35 @@ with st.expander(
 st.markdown(
     """
 <style>
-  /* ---------- stage rail (chips) ---------- */
+  /* ---------- stage rail (chips) — flat states: done / active / pending ---------- */
   .mg-progress { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 12px 0; }
-  .mg-progress span { font-size:.8rem; color:#8B95A9; padding:5px 12px;
-      border-radius:999px; border:1px solid rgba(226,232,240,.15);
-      transition: all .3s ease; }
-  .mg-progress span.on { color:#0A0E1A; background:#00D4AA; border-color:#00D4AA; font-weight:700; }
-  .mg-progress span.active { animation: mgChipGlow 1.4s ease-in-out infinite; }
-  .mg-progress span.done { color:#7BF1D9; border-color:rgba(0,212,170,.45); }
-  @keyframes mgChipGlow { 0%,100% { box-shadow: 0 0 0 rgba(0,212,170,0); }
-                          50% { box-shadow: 0 0 14px rgba(0,212,170,.55); } }
+  .mg-progress span { font-size:.78rem; color:#6b7a8d; padding:4px 12px;
+      border-radius:4px; border:1px solid #dee2e6; background:#ffffff; }
+  .mg-progress span.done { color:#1a7f37; border-color:#a8cdb2;
+      background:#f2f8f4; }
+  .mg-progress span.active { color:#0066cc; border-color:#0066cc;
+      background:#f4f8fc; font-weight:700; }
 
-  /* ---------- premium dual-ring spinner ---------- */
-  .mg-scan { position:relative; width:54px; height:54px; flex:none; }
+  /* ---------- spinner — one flat ring ---------- */
+  .mg-scan { position:relative; width:40px; height:40px; flex:none; }
   .mg-scan .ring { position:absolute; inset:0; border-radius:50%;
-      border:2.5px solid rgba(0,212,170,.12); border-top-color:#00D4AA;
+      border:3px solid #e4e9ee; border-top-color:#0066cc;
       animation: mgSpin .9s linear infinite; }
-  .mg-scan .ring2 { position:absolute; inset:7px; border-radius:50%;
-      border:2.5px solid transparent; border-bottom-color:#7BF1D9;
-      animation: mgSpin 1.4s linear infinite reverse; }
-  .mg-scan .shield { position:absolute; inset:0; display:flex; align-items:center;
-      justify-content:center; font-size:1.2rem;
-      animation: mgThrob 1.8s ease-in-out infinite; }
   @keyframes mgSpin { to { transform: rotate(360deg); } }
-  @keyframes mgThrob { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
 
   /* ---------- current-stage line ---------- */
   .mg-stage-line { display:flex; align-items:center; gap:14px; margin:4px 0 10px 0; }
-  .mg-stage-label { color:#E2E8F0; font-weight:700; letter-spacing:.4px;
-      font-family:'Outfit','Inter',sans-serif; }
-  .mg-stage-sub { color:#8B95A9; font-size:.82rem; margin-top:3px; }
+  .mg-stage-label { color:#2c3e50; font-weight:700; letter-spacing:.3px; }
+  .mg-stage-sub { color:#6b7a8d; font-size:.82rem; margin-top:3px; }
 
-  /* ---------- verdict/claim polish ---------- */
-  .mg-meter > div { transform-origin: left;
-      animation: mgFill 1.1s cubic-bezier(.2,.7,.3,1) both; }
-  @keyframes mgFill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-  .mg-claim { animation: mgIn .45s ease both; }
+  /* ---------- claim entrance ---------- */
+  .mg-claim { animation: mgIn .4s ease both; }
   .mg-claim:nth-child(2) { animation-delay: .06s; }
   .mg-claim:nth-child(3) { animation-delay: .12s; }
   .mg-claim:nth-child(4) { animation-delay: .18s; }
   [data-testid="stTextArea"] textarea:focus {
-      border-color: rgba(0,212,170,.6) !important;
-      box-shadow: 0 0 0 3px rgba(0,212,170,.12) !important; }
+      border-color: #0066cc !important;
+      box-shadow: none !important; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -704,7 +697,7 @@ _STAGE_INFO = {
         "A separate checker scores how well each claim follows the guideline…",
     ),
     "done": (
-        "✔ Audit complete",
+        "Audit complete",
         "Building the report…",
     ),
 }
@@ -718,8 +711,8 @@ _STAGE_CHIP_LABELS = {
 
 def _stage_chips(active: str, visible: list[str]) -> str:
     """Chips for the stages this audit mode actually runs: everything before
-    the active stage is done (green outline), the active stage glows, later
-    stages stay dim. On 'done', all visible stages are done."""
+    the active stage is done (green), the active stage is highlighted (blue),
+    later stages stay muted. On 'done', all visible stages are done."""
     active = "holistic" if active == "holistic-skip" else active
     keys = [k for k in _STAGE_KEYS if k in visible]
     try:
@@ -728,7 +721,7 @@ def _stage_chips(active: str, visible: list[str]) -> str:
         idx = len(keys)
     chips = []
     for i, key in enumerate(keys):
-        cls = "done" if i < idx else ("on active" if i == idx else "")
+        cls = "done" if i < idx else ("active" if i == idx else "")
         chips.append(f'<span class="{cls}">{_STAGE_CHIP_LABELS[key]}</span>')
     return "".join(chips)
 
@@ -739,17 +732,14 @@ def _paint_stage(box, key: str, visible: list[str]) -> None:
     label, sub = _STAGE_INFO[key]
     if key == "done":
         spinner = ""
-        label_html = f'<div class="mg-stage-label" style="color:#7BF1D9;">{label}</div>'
+        label_html = f'<div class="mg-stage-label" style="color:#1a7f37;">{label}</div>'
     else:
-        spinner = (
-            '<div class="mg-scan"><div class="ring"></div>'
-            '<div class="ring2"></div><div class="shield">🛡️</div></div>'
-        )
+        spinner = '<div class="mg-scan"><div class="ring"></div></div>'
         label_html = f'<div class="mg-stage-label">{label}</div>'
     box.markdown(
         f"""
 <div class="mg-stage-line">{spinner}{label_html}</div>
-<div class="mg-stage-sub" style="margin:-6px 0 10px 68px;">{sub}</div>
+<div class="mg-stage-sub" style="margin:-6px 0 10px 54px;">{sub}</div>
 <div class="mg-progress">{_stage_chips(key, visible)}</div>
 """,
         unsafe_allow_html=True,
@@ -771,7 +761,7 @@ def _run_staged_audit(question: str, source: str, answer: str, checker: str,
 
     run_audit reports each pipeline phase as it starts (via the progress
     callback); those events flow through a queue to this thread, which repaints
-    the stage card — so chips 1→2→3 genuinely light up as the work happens.
+    the stage card — so chips 1, 2, 3 genuinely light up as the work happens.
     Identical re-audits within the session hit the memo and cost ZERO API calls.
     """
     ck = _audit_cache_key(question, source, answer, checker, thorough, api_key)
@@ -867,7 +857,7 @@ if run_clicked:
             st.warning(
                 "We couldn't find a guideline for this topic in our built-in library, "
                 "so we can't honestly audit this answer — guessing would be dangerous. "
-                "Paste the official guideline text in the 📖 box and try again."
+                "Paste the official guideline text in the guideline box and try again."
             )
             verdict_preview = compute_unverifiable()
             render_verdict(verdict_preview["verdict"], verdict_preview["coverage"], verdict_preview["reason"])
@@ -875,12 +865,12 @@ if run_clicked:
         source = match["text"]
         used_source_name = match.get("source_name", "our built-in guideline library")
         st.info(
-            f"📖 No guideline was pasted, so we used our built-in guideline on "
+            f"No guideline was pasted, so we used our built-in guideline on "
             f"**{match['topic']}** — *Source: {used_source_name}* "
             f"(a simplified public-health summary, not a verbatim official document)"
         )
 
-    thorough_mode = audit_mode == "🔍 Thorough (full audit)"
+    thorough_mode = audit_mode == "Thorough (full audit)"
     try:
         result = _run_staged_audit(
             question, source, answer, checker_clean, thorough_mode,
@@ -891,7 +881,7 @@ if run_clicked:
 
         if isinstance(err, RateLimitError):
             st.warning(
-                "⏳ Groq's free tier needs a short breather (rate limit). "
+                "Groq's free tier needs a short breather (rate limit). "
                 "Wait about a minute and press **Audit this answer** again — "
                 "nothing is broken."
             )
@@ -913,7 +903,7 @@ if run_clicked:
 
     if used_source_name:
         st.markdown(
-            f'<div class="mg-card" style="padding:10px 16px;">📚 '
+            f'<div class="mg-card" style="padding:10px 16px;">'
             f'Guideline used for this check: <b>{used_source_name}</b> — {match["topic"]}</div>',
             unsafe_allow_html=True,
         )
@@ -926,13 +916,13 @@ if run_clicked:
 
     if result.get("crosscheck_score") is not None:
         pct = max(0.0, min(1.0, float(result["crosscheck_score"]))) * 100
-        with st.expander("🔬 Second opinion (independent AI checker)"):
+        with st.expander("Second opinion (independent AI checker)"):
             st.markdown(
                 f"""
                 <div class="mg-card">
                   <div style="display:flex; justify-content:space-between; align-items:baseline;">
-                    <div style="color:#AEB7C8;">{result["crosscheck_checker"].upper()} agreement score</div>
-                    <div style="font-family:'Outfit'; font-weight:800; font-size:1.5rem; color:#00D4AA;">{pct:.0f}%</div>
+                    <div style="color:#6b7a8d;">{result["crosscheck_checker"].upper()} agreement score</div>
+                    <div style="font-weight:700; font-size:1.5rem; color:#0066cc;">{pct:.0f}%</div>
                   </div>
                   <div class="v-sub" style="margin-top:8px;">A second, independent checker
                   (a different kind of AI — not the one that judged above) was also asked
@@ -942,12 +932,12 @@ if run_clicked:
                 unsafe_allow_html=True,
             )
 
-    with st.expander("🔧 Technical details (for engineers)"):
+    with st.expander("Technical details (for engineers)"):
         st.caption(f"Trust score: {result['coverage']}% of the answer's claims were backed by the guideline.")
         st.json(json.dumps(result, indent=2, ensure_ascii=False))
 
 # ---------------------------------------------------------------------------
-# ⚔️ Classroom demo — run + render (Bot vs Bot)
+# Classroom demo — run + render (Bot vs Bot)
 # ---------------------------------------------------------------------------
 if battle_clicked and demo_q:
     with st.spinner("Running the classroom demo — both bots answer, then both get graded…"):
@@ -955,7 +945,7 @@ if battle_clicked and demo_q:
             battle = _run_bot_battle(demo_q, manual_key or None)
         except RateLimitError:
             st.warning(
-                "⏳ Groq's free tier needs a short breather (rate limit). The demo uses several "
+                "Groq's free tier needs a short breather (rate limit). The demo uses several "
                 "calls in a row — wait about a minute and press **Run the classroom demo** again."
             )
             battle = None
@@ -969,8 +959,8 @@ if battle_clicked and demo_q:
     if battle:
         # log both students into history, labeled
         _bh = st.session_state.get("mg_history", [])
-        for who, ans, res in (("👦 naive bot", battle["naive"], battle["naive_result"]),
-                              ("👧 RAG bot", battle["rag"], battle["rag_result"])):
+        for who, ans, res in (("naive bot", battle["naive"], battle["naive_result"]),
+                              ("RAG bot", battle["rag"], battle["rag_result"])):
             _bh.insert(0, {
                 "q": f"{who} · {demo_q}", "source": battle["naive_result"]["source"],
                 "answer": ans, "checker": "none", "thorough": True,
@@ -979,7 +969,7 @@ if battle_clicked and demo_q:
         st.session_state["mg_history"] = _bh[:5]
 
         st.markdown(
-            f'<div class="mg-card" style="padding:10px 16px; margin-top:8px;">📚 '
+            f'<div class="mg-card" style="padding:10px 16px; margin-top:8px;">'
             f"Textbook page used to grade both students: <b>{battle['topic']}</b> — "
             f"{battle['source_name']}</div>",
             unsafe_allow_html=True,
@@ -988,13 +978,13 @@ if battle_clicked and demo_q:
         rag_v = battle["rag_result"]
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("#### 👦 The Naive bot — answered from memory")
+            st.markdown("#### The naive bot — answered from memory")
             st.caption("No textbook. Typical health-chatbot behavior: confident and specific.")
             with st.expander("What it answered", expanded=True):
                 st.markdown(f"> {battle['naive'][:800]}")
             render_verdict(naive_v["verdict"], naive_v["coverage"], naive_v["reason"])
         with col2:
-            st.markdown("#### 👧 The RAG bot — answered from the guideline")
+            st.markdown("#### The RAG bot — answered from the guideline")
             st.caption(f"Read the '{battle['topic']}' page first, then answered using only it.")
             with st.expander("What it answered", expanded=True):
                 st.markdown(f"> {battle['rag'][:800]}")
@@ -1002,9 +992,9 @@ if battle_clicked and demo_q:
                 st.markdown(
                     """
                     <div class="mg-card" style="padding:14px 18px;">
-                      <div style="font-family:'Outfit'; font-weight:800; font-size:1.05rem; color:#7BF1D9;">
-                        🙅 RAG BOT DECLINED TO ANSWER — the honest move</div>
-                      <div style="color:#AEB7C8; margin-top:6px; font-size:.92rem;">
+                      <div style="font-weight:700; font-size:1.05rem; color:#1a7f37;">
+                        THE RAG BOT DECLINED TO ANSWER — the honest move</div>
+                      <div style="color:#6b7a8d; margin-top:6px; font-size:.92rem;">
                         The guideline page doesn't answer this question, so the grounded bot
                         refused instead of guessing. (The judge technically flags the refusal
                         sentence — "the source does talk about this topic" — but refusing
@@ -1032,22 +1022,21 @@ if battle_clicked and demo_q:
 hist = st.session_state.get("mg_history", [])
 if hist:
     st.markdown(
-        f'<div class="mg-card" style="padding:10px 16px; margin-top:8px;">🕘 '
+        f'<div class="mg-card" style="padding:10px 16px; margin-top:8px;">'
         f"<b>Recent audits</b> ({len(hist)}) — click one to view it without re-running</div>",
         unsafe_allow_html=True,
     )
     for i, h in enumerate(hist):
         v = h["result"]["verdict"]
-        icon = {"BLOCKED": "🔴", "SAFE": "🟢", "WARNING": "🟡", "UNVERIFIABLE": "⚪"}.get(v, "⚪")
         label = (h["q"][:55] + "…") if len(h["q"]) > 55 else h["q"]
-        with st.expander(f"{icon} {label} — {v}", expanded=(i == 0)):
+        with st.expander(f"{label} — {v}", expanded=(i == 0)):
             r = h["result"]
             st.markdown(f"**Verdict:** {v} · **Trust score:** {r['coverage']}%")
             st.caption(r["reason"][:300])
             st.caption(f"Audited with: {h['checker'] if h['checker'] != 'none' else 'judge only'} · "
                        f"{'Thorough' if h['thorough'] else 'Fast'} mode")
             for c in r["claims"][:4]:
-                st.markdown(f"- `{'✅' if c['status']=='SUPPORTED' else '❔' if c['status']=='UNSUPPORTED' else '🚫'}` {c['claim'][:90]}")
+                st.markdown(f"- **{c['status']}** — {c['claim'][:90]}")
 # ---------------------------------------------------------------------------
 # Empty state — before the first audit
 # ---------------------------------------------------------------------------
@@ -1055,13 +1044,12 @@ if not run_clicked and not st.session_state.get("mg_history"):
     st.markdown(
         """
         <div class="mg-card" style="text-align:center; padding:34px 26px; margin-top:8px;">
-          <div style="font-size:2.4rem;">🛡️</div>
-          <div style="font-family:'Outfit'; font-weight:800; font-size:1.25rem; color:#E2E8F0; margin-top:6px;">
+          <div style="font-weight:700; font-size:1.25rem; color:#2c3e50; margin-top:6px;">
             Ready when you are
           </div>
-          <div style="color:#8B95A9; margin-top:8px; font-size:.95rem;">
-            Paste a question + an AI answer above (or pick a 🧪 example in the sidebar),
-            then press <b style="color:#00D4AA;">Audit this answer</b>.<br>
+          <div style="color:#6b7a8d; margin-top:8px; font-size:.95rem;">
+            Paste a question + an AI answer above (or pick an example in the sidebar),
+            then press <b style="color:#0066cc;">Audit this answer</b>.<br>
             Every claim gets checked against an official guideline — and you'll see
             exactly which guideline said what.
           </div>
@@ -1071,7 +1059,7 @@ if not run_clicked and not st.session_state.get("mg_history"):
     )
 
 st.markdown(
-    '<div class="mg-footer">🛡️ MedGuard is an AI evaluation tool for educational purposes. '
+    '<div class="mg-footer">MedGuard is an AI evaluation tool for educational purposes. '
     "It does not provide medical advice and does not replace professional clinical "
     "judgment or official guidelines.</div>",
     unsafe_allow_html=True,
