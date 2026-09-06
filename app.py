@@ -100,17 +100,72 @@ WORDMARK_IMG = (
 )
 
 # ---------------------------------------------------------------------------
-# CSS — the clinical flat design layer (borders + typography, no effects)
+# Dual-mode palette: one token set per theme mode. Every custom class reads
+# these via CSS variables, so switching modes is swapping ONE :root block —
+# the class rules never change. Light values are the shipped clinical theme;
+# Dark is the same design (flat surfaces + 1px hairlines) on a deep navy.
 # ---------------------------------------------------------------------------
-st.markdown(
-    """
-<style>
-  /* ---------- MedGuard clinical design system — flat light theme ----------
-     Palette: #0066cc primary · #fafbfc app bg · #ffffff surfaces · #f4f6f8
-     secondary · #2c3e50 text · #6b7a8d muted · #dee2e6 hairlines.
-     Status: #c62828 fail · #1a7f37 pass · #b26a00 caution · #546e7a n/a.
-     House rules: solid fills and 1px borders only — no gradients, no blur,
-     no glow shadows, no transform hovers, no emoji. */
+PALETTES = {
+    "Light": {
+        "bg": "#fafbfc",
+        "bg-sidebar": "#f4f6f8",
+        "surface": "#ffffff",
+        "input-bg": "#ffffff",
+        "hairline": "#dee2e6",
+        "text": "#2c3e50",
+        "muted": "#6b7a8d",
+        "accent": "#0066cc",
+        "accent-strong": "#0066cc",
+        "primary-hover": "#0052a3",
+        "on-accent": "#ffffff",
+        "quote-bg": "#f4f8fc",
+        "quote-border": "#0066cc",
+        "fail": "#c62828",
+        "pass": "#1a7f37",
+        "caution": "#b26a00",
+        "na": "#546e7a",
+        "sup-bg": "#f2f8f4", "sup-bd": "#a8cdb2", "sup-tx": "#1a7f37",
+        "uns-bg": "#fbf6ec", "uns-bd": "#dcbf94", "uns-tx": "#b26a00",
+        "con-bg": "#fcf2f2", "con-bd": "#dba5a5", "con-tx": "#c62828",
+    },
+    "Dark": {
+        "bg": "#0d131a",
+        "bg-sidebar": "#111823",
+        "surface": "#151e29",
+        "input-bg": "#0b1118",
+        "hairline": "#2a3644",
+        "text": "#e8eef4",
+        "muted": "#93a4b8",
+        "accent": "#5aa9e6",
+        "accent-strong": "#2f80c9",
+        "primary-hover": "#2470b8",
+        "on-accent": "#ffffff",
+        "quote-bg": "#142331",
+        "quote-border": "#3d8fd1",
+        "fail": "#e57272",
+        "pass": "#63b46a",
+        "caution": "#d9a13d",
+        "na": "#8fa3b8",
+        "sup-bg": "#14231a", "sup-bd": "#2c5a36", "sup-tx": "#63b46a",
+        "uns-bg": "#241f12", "uns-bd": "#675429", "uns-tx": "#d9a13d",
+        "con-bg": "#251616", "con-bd": "#6e3232", "con-tx": "#e57272",
+    },
+}
+
+
+def _root_vars(palette: dict[str, str]) -> str:
+    """:root block mapping every palette token to a CSS custom property."""
+    return ":root {" + "".join(f"--{k}: {v};" for k, v in palette.items()) + "}"
+
+
+# Custom-class design rules. Same flat system in both modes — every color is a
+# token, so this block is mode-independent. House rules hold in BOTH palettes:
+# solid fills and 1px borders only, no gradients / blur / glow / transforms.
+MG_BASE_CSS = """
+  /* ---------- MedGuard clinical design system — flat, dual-mode (Light/Dark).
+     Colors come from :root tokens (PALETTES above); swap the mode and the
+     same rules re-render. No gradients, no blur, no glow, no transform
+     hovers, no emoji — in either mode. */
   #MainMenu, footer, header { visibility: hidden; }
   /* The collapsed-sidebar reopen arrow (stExpandSidebarButton) renders
      INSIDE that hidden header — without this rule the sidebar can be
@@ -119,68 +174,68 @@ st.markdown(
   header [data-testid="stExpandSidebarButton"] * {
       visibility: visible !important; }
   header [data-testid="stExpandSidebarButton"] {
-      background: #ffffff !important;
-      border: 1px solid #dee2e6 !important;
+      background: var(--surface) !important;
+      border: 1px solid var(--hairline) !important;
       border-radius: 6px !important;
       box-shadow: none !important; }
 
   /* ---------- header ---------- */
   .mg-header { display:flex; align-items:center; gap:16px; padding: 16px 2px 0 2px; }
   .mg-logo { display:flex; align-items:center; gap:10px; font-size:1.65rem;
-      font-weight:700; color:#2c3e50; letter-spacing:-.2px; }
+      font-weight:700; color:var(--text); letter-spacing:-.2px; }
   .mg-mark { display:block; }
-  .mg-tag { color:#6b7a8d; font-size:.95rem; margin-top:4px; }
-  .mg-rule { height:1px; margin:14px 0 18px 0; background:#dee2e6; }
+  .mg-tag { color:var(--muted); font-size:.95rem; margin-top:4px; }
+  .mg-rule { height:1px; margin:14px 0 18px 0; background:var(--hairline); }
 
   /* ---------- cards ---------- */
-  .mg-card { background:#ffffff; border:1px solid #dee2e6;
+  .mg-card { background:var(--surface); border:1px solid var(--hairline);
       border-radius:6px; padding:18px 20px; }
 
   /* ---------- verdict card — status = colored edge rule + headline ---------- */
-  .mg-verdict { background:#ffffff; border:1px solid #dee2e6;
-      border-left:4px solid #546e7a; border-radius:6px; padding:22px 24px;
+  .mg-verdict { background:var(--surface); border:1px solid var(--hairline);
+      border-left:4px solid var(--na); border-radius:6px; padding:22px 24px;
       animation: mgIn .4s ease both; }
   .mg-verdict .v-label { font-weight:700; font-size:1.5rem; letter-spacing:.5px;
       line-height:1.3; }
-  .mg-verdict .v-sub { color:#2c3e50; margin-top:8px; font-size:1rem; }
+  .mg-verdict .v-sub { color:var(--text); margin-top:8px; font-size:1rem; }
   .mg-verdict .v-sub.advice { font-weight:600; }
-  .mg-verdict-BLOCKED { border-left-color:#c62828; }
-  .mg-verdict-BLOCKED .v-label, .mg-verdict-BLOCKED .v-sub.advice { color:#c62828; }
-  .mg-verdict-SAFE { border-left-color:#1a7f37; }
-  .mg-verdict-SAFE .v-label, .mg-verdict-SAFE .v-sub.advice { color:#1a7f37; }
-  .mg-verdict-WARNING { border-left-color:#b26a00; }
-  .mg-verdict-WARNING .v-label, .mg-verdict-WARNING .v-sub.advice { color:#b26a00; }
-  .mg-verdict-UNVERIFIABLE { border-left-color:#546e7a; }
-  .mg-verdict-UNVERIFIABLE .v-label, .mg-verdict-UNVERIFIABLE .v-sub.advice { color:#546e7a; }
+  .mg-verdict-BLOCKED { border-left-color:var(--fail); }
+  .mg-verdict-BLOCKED .v-label, .mg-verdict-BLOCKED .v-sub.advice { color:var(--fail); }
+  .mg-verdict-SAFE { border-left-color:var(--pass); }
+  .mg-verdict-SAFE .v-label, .mg-verdict-SAFE .v-sub.advice { color:var(--pass); }
+  .mg-verdict-WARNING { border-left-color:var(--caution); }
+  .mg-verdict-WARNING .v-label, .mg-verdict-WARNING .v-sub.advice { color:var(--caution); }
+  .mg-verdict-UNVERIFIABLE { border-left-color:var(--na); }
+  .mg-verdict-UNVERIFIABLE .v-label, .mg-verdict-UNVERIFIABLE .v-sub.advice { color:var(--na); }
   @keyframes mgIn { from { opacity:0; } to { opacity:1; } }
 
   /* ---------- claim chips + rows ---------- */
   .mg-chip { display:inline-flex; align-items:center; padding:3px 10px;
       border-radius:4px; font-size:.72rem; font-weight:700; letter-spacing:.6px;
       border:1px solid; }
-  .mg-chip-SUPPORTED { color:#1a7f37; border-color:#a8cdb2; background:#f2f8f4; }
-  .mg-chip-UNSUPPORTED { color:#b26a00; border-color:#dcbf94; background:#fbf6ec; }
-  .mg-chip-CONTRADICTION { color:#c62828; border-color:#dba5a5; background:#fcf2f2; }
-  .mg-claim { border-left:3px solid #dee2e6; padding:12px 14px; margin:10px 0;
-      border-radius:0 6px 6px 0; background:#ffffff; }
-  .mg-claim-CONTRADICTION { border-left-color:#c62828; }
-  .mg-claim-UNSUPPORTED { border-left-color:#b26a00; }
-  .mg-claim .c-text { color:#2c3e50; font-size:.98rem; }
-  .mg-claim .c-why { color:#6b7a8d; font-size:.85rem; margin-top:5px; }
-  .mg-quote { border-left:3px solid #0066cc; background:#f4f8fc;
+  .mg-chip-SUPPORTED { color:var(--sup-tx); border-color:var(--sup-bd); background:var(--sup-bg); }
+  .mg-chip-UNSUPPORTED { color:var(--uns-tx); border-color:var(--uns-bd); background:var(--uns-bg); }
+  .mg-chip-CONTRADICTION { color:var(--con-tx); border-color:var(--con-bd); background:var(--con-bg); }
+  .mg-claim { border-left:3px solid var(--hairline); padding:12px 14px; margin:10px 0;
+      border-radius:0 6px 6px 0; background:var(--surface); }
+  .mg-claim-CONTRADICTION { border-left-color:var(--fail); }
+  .mg-claim-UNSUPPORTED { border-left-color:var(--caution); }
+  .mg-claim .c-text { color:var(--text); font-size:.98rem; }
+  .mg-claim .c-why { color:var(--muted); font-size:.85rem; margin-top:5px; }
+  .mg-quote { border-left:3px solid var(--quote-border); background:var(--quote-bg);
       padding:10px 14px; border-radius:0 6px 6px 0; }
-  .mg-quote, .mg-quote * { color:#2c3e50; font-style:italic; }
+  .mg-quote, .mg-quote * { color:var(--text); font-style:italic; }
 
   /* ---------- side-by-side source panel ---------- */
   .mg-duo { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
   .mg-duo .head { font-weight:700; letter-spacing:.8px; font-size:.78rem;
       margin-bottom:8px; }
-  .mg-duo .claimed { color:#c62828; }
-  .mg-duo .sourced { color:#1a7f37; }
+  .mg-duo .claimed { color:var(--fail); }
+  .mg-duo .sourced { color:var(--pass); }
 
   /* ---------- footer ---------- */
-  .mg-footer { color:#6b7a8d; font-size:.82rem; text-align:center;
-      padding:22px 0 8px 0; border-top:1px solid #dee2e6; margin-top:26px; }
+  .mg-footer { color:var(--muted); font-size:.82rem; text-align:center;
+      padding:22px 0 8px 0; border-top:1px solid var(--hairline); margin-top:26px; }
 
   /* ---------- mobile ---------- */
   @media (max-width: 760px) {
@@ -190,8 +245,120 @@ st.markdown(
     .mg-verdict .v-label { font-size: 1.3rem; }
     .mg-card { padding: 14px 12px; }
   }
-</style>
-""",
+"""
+
+# Dark-mode overrides for Streamlit's OWN chrome (the light theme in
+# config.toml drives these in Light mode; in Dark we repaint them with the
+# same tokens). Still flat: solid fills, 1px borders, no effects.
+MG_DARK_CHROME_CSS = """
+  /* ---------- dark mode: repaint Streamlit chrome with the same tokens ---------- */
+  body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+      background-color: var(--bg) !important; }
+  .stApp { color: var(--text) !important; }
+  [data-testid="stSidebar"], [data-testid="stSidebarContent"] {
+      background-color: var(--bg-sidebar) !important; }
+  [data-testid="stSidebar"] p, [data-testid="stSidebar"] span,
+  [data-testid="stSidebar"] label, [data-testid="stSidebar"] h1,
+  [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+      color: var(--text) !important; }
+  h1, h2, h3, h4, h5, h6 { color: var(--text) !important; }
+  [data-testid="stMarkdownContainer"] { color: var(--text) !important; }
+  [data-testid="stMarkdownContainer"] blockquote {
+      border-left: 3px solid var(--hairline); color: var(--muted); }
+  [data-testid="stMarkdownContainer"] code, [data-testid="stMarkdownContainer"] pre {
+      background-color: var(--input-bg) !important; color: var(--text) !important; }
+  [data-testid="stCaptionContainer"] { color: var(--muted) !important; }
+  [data-testid="stWidgetLabel"] p { color: var(--text) !important; }
+  [data-testid="stRadio"] label, [data-testid="stRadio"] label * {
+      color: var(--text) !important; }
+  [data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea,
+  [data-testid="stSelectbox"] input[role="combobox"],
+  [data-testid="stNumberInput"] input {
+      background-color: var(--input-bg) !important; color: var(--text) !important;
+      border-color: var(--hairline) !important; }
+  ::placeholder { color: var(--muted) !important; }
+  [data-testid="stSelectbox"] svg { color: var(--muted) !important; }
+  .stButton > button { background-color: var(--surface) !important;
+      color: var(--text) !important; border: 1px solid var(--hairline) !important; }
+  .stButton > button:hover { color: var(--accent) !important;
+      border-color: var(--accent) !important; }
+  .stButton > button[kind="primary"] {
+      background-color: var(--accent-strong) !important;
+      color: var(--on-accent) !important;
+      border: 1px solid var(--accent-strong) !important; }
+  .stButton > button[kind="primary"]:hover {
+      background-color: var(--primary-hover) !important;
+      border-color: var(--primary-hover) !important;
+      color: var(--on-accent) !important; }
+  [data-testid="stExpander"] { background-color: var(--surface) !important;
+      border: 1px solid var(--hairline) !important; }
+  [data-testid="stExpander"] summary,
+  [data-testid="stExpander"] summary * { color: var(--text) !important; }
+  [data-testid="stExpander"] summary:hover {
+      background-color: var(--surface) !important; }
+  [data-testid="stAlert"] { background-color: var(--surface) !important;
+      border: 1px solid var(--hairline) !important; }
+  [data-testid="stAlert"], [data-testid="stAlert"] * { color: var(--text) !important; }
+  [data-testid="stCodeBlock"], [data-testid="stCodeBlock"] pre,
+  [data-testid="stCodeBlock"] code,
+  [data-testid="stCode"], [data-testid="stCode"] pre,
+  [data-testid="stCode"] code { background-color: var(--input-bg) !important;
+      color: var(--text) !important; border-color: var(--hairline) !important; }
+  [data-testid="stToolbar"], [data-testid="stHeader"] {
+      background-color: var(--bg) !important; }
+  [data-testid="stHeader"] * { color: var(--muted) !important; }
+  /* Input ROOT containers (the input's own border/bg wrapper) — the inner
+     input rule above covers the text field, this covers its frame. */
+  [data-testid="stTextInput"] > div,
+  [data-testid="stTextInput"] [data-testid="stTextInputRootElement"] { background-color: transparent !important; }
+  [data-testid="stTextArea"] [data-testid="stTextAreaRootElement"] { background-color: transparent !important; }
+  [data-testid="stSelectbox"] > div,
+  [data-testid="stSelectbox"] [data-testid="stTextInputRootElement"],
+  [data-testid="stSelectbox"] .react-aria-ComboBox > div { background-color: transparent !important; }
+  /* Combobox trigger wrapper (the light 40px frame around the value) */
+  [data-testid="stSelectbox"] [role="group"] { background-color: var(--input-bg) !important;
+      border: 1px solid var(--hairline) !important; border-radius: 6px !important; }
+  /* Radio markers: UNCHECKED housing = input-bg + hairline ring. The CHECKED
+     marker is Streamlit's own 16px primary dot + 6px white center — visible
+     on both palettes, so it is left alone except for the ring border. */
+  [data-testid="stRadioOption"]:not([data-selected="true"]) div {
+      background-color: var(--input-bg) !important;
+      border-color: var(--hairline) !important; }
+  [data-testid="stRadioOption"][data-selected="true"] div {
+      border-color: var(--accent-strong) !important; }
+  [data-testid="stRadioOption"] label, [data-testid="stRadioOption"] p {
+      color: var(--text) !important; }
+  /* Radio hover/focus must not lift anything either */
+  [data-testid="stRadioOption"]:focus,
+  [data-testid="stRadioOption"]:hover { box-shadow: none !important;
+      outline: 1px solid var(--hairline) !important; }
+  /* st.code() widget: every wrapper div is transparent (pre/code keep
+     the input-bg rule above); kills the light toolbar frame. */
+  [data-testid="stCode"] div { background-color: transparent !important; }
+  [data-testid="stDivider"] hr, [data-testid="stMarkdownContainer"] hr {
+      border-color: var(--hairline) !important; background: var(--hairline) !important; }
+  [role="listbox"] { background-color: var(--surface) !important;
+      border: 1px solid var(--hairline) !important; }
+  [role="listbox"] [role="option"] { color: var(--text) !important;
+      background-color: var(--surface) !important; }
+  [role="option"]:hover, [role="option"][data-highlighted] {
+      background-color: var(--quote-bg) !important; }
+  [data-testid="stStatusWidget"] { background-color: var(--surface) !important;
+      border: 1px solid var(--hairline) !important; color: var(--text) !important; }
+  [data-testid="stStatusWidget"] * { color: var(--text) !important; }
+  [data-testid="stToolbar"] { color: var(--muted) !important; }
+"""
+
+# ---------------------------------------------------------------------------
+# CSS — the clinical flat design layer (borders + typography, dual-mode
+# Light/Dark via the palette tokens; no effects in either mode)
+# ---------------------------------------------------------------------------
+# Mode comes from the sidebar Theme selector; session state carries it across
+# reruns (first visit = Light). Read BEFORE the palette is emitted below.
+_theme_mode = "Dark" if st.session_state.get("mg_theme") == "Dark" else "Light"
+st.markdown(
+    "<style>" + _root_vars(PALETTES[_theme_mode]) + MG_BASE_CSS
+    + (MG_DARK_CHROME_CSS if _theme_mode == "Dark" else "") + "</style>",
     unsafe_allow_html=True,
 )
 
@@ -260,7 +427,7 @@ def render_claims(claims: list[dict]) -> None:
         )
         disagree = c.get("disagreement")
         disagree_html = (
-            f'<div class="c-why" style="margin-top:4px;color:#b26a00;">{disagree}</div>'
+            f'<div class="c-why" style="margin-top:4px;color:var(--caution);">{disagree}</div>'
             if disagree else ""
         )
         st.markdown(
@@ -401,6 +568,15 @@ with st.sidebar:
         </div>
         """,
         unsafe_allow_html=True,
+    )
+
+    st.radio(
+        "Theme",
+        ["Light", "Dark"],
+        key="mg_theme",
+        horizontal=True,
+        help="Light is the clinical default; Dark is the same flat design "
+        "on a deep-navy palette for low-light reading.",
     )
 
     with st.expander("How to use this app"):
@@ -641,24 +817,24 @@ st.markdown(
 <style>
   /* ---------- stage rail (chips) — flat states: done / active / pending ---------- */
   .mg-progress { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 12px 0; }
-  .mg-progress span { font-size:.78rem; color:#6b7a8d; padding:4px 12px;
-      border-radius:4px; border:1px solid #dee2e6; background:#ffffff; }
-  .mg-progress span.done { color:#1a7f37; border-color:#a8cdb2;
-      background:#f2f8f4; }
-  .mg-progress span.active { color:#0066cc; border-color:#0066cc;
-      background:#f4f8fc; font-weight:700; }
+  .mg-progress span { font-size:.78rem; color:var(--muted); padding:4px 12px;
+      border-radius:4px; border:1px solid var(--hairline); background:var(--surface); }
+  .mg-progress span.done { color:var(--sup-tx); border-color:var(--sup-bd);
+      background:var(--sup-bg); }
+  .mg-progress span.active { color:var(--accent); border-color:var(--quote-border);
+      background:var(--quote-bg); font-weight:700; }
 
   /* ---------- spinner — one flat ring ---------- */
   .mg-scan { position:relative; width:40px; height:40px; flex:none; }
   .mg-scan .ring { position:absolute; inset:0; border-radius:50%;
-      border:3px solid #e4e9ee; border-top-color:#0066cc;
+      border:3px solid var(--hairline); border-top-color:var(--accent-strong);
       animation: mgSpin .9s linear infinite; }
   @keyframes mgSpin { to { transform: rotate(360deg); } }
 
   /* ---------- current-stage line ---------- */
   .mg-stage-line { display:flex; align-items:center; gap:14px; margin:4px 0 10px 0; }
-  .mg-stage-label { color:#2c3e50; font-weight:700; letter-spacing:.3px; }
-  .mg-stage-sub { color:#6b7a8d; font-size:.82rem; margin-top:3px; }
+  .mg-stage-label { color:var(--text); font-weight:700; letter-spacing:.3px; }
+  .mg-stage-sub { color:var(--muted); font-size:.82rem; margin-top:3px; }
 
   /* ---------- claim entrance ---------- */
   .mg-claim { animation: mgIn .4s ease both; }
@@ -666,7 +842,7 @@ st.markdown(
   .mg-claim:nth-child(3) { animation-delay: .12s; }
   .mg-claim:nth-child(4) { animation-delay: .18s; }
   [data-testid="stTextArea"] textarea:focus {
-      border-color: #0066cc !important;
+      border-color: var(--accent-strong) !important;
       box-shadow: none !important; }
 </style>
 """,
@@ -732,7 +908,7 @@ def _paint_stage(box, key: str, visible: list[str]) -> None:
     label, sub = _STAGE_INFO[key]
     if key == "done":
         spinner = ""
-        label_html = f'<div class="mg-stage-label" style="color:#1a7f37;">{label}</div>'
+        label_html = f'<div class="mg-stage-label" style="color:var(--pass);">{label}</div>'
     else:
         spinner = '<div class="mg-scan"><div class="ring"></div></div>'
         label_html = f'<div class="mg-stage-label">{label}</div>'
@@ -921,8 +1097,8 @@ if run_clicked:
                 f"""
                 <div class="mg-card">
                   <div style="display:flex; justify-content:space-between; align-items:baseline;">
-                    <div style="color:#6b7a8d;">{result["crosscheck_checker"].upper()} agreement score</div>
-                    <div style="font-weight:700; font-size:1.5rem; color:#0066cc;">{pct:.0f}%</div>
+                    <div style="color:var(--muted);">{result["crosscheck_checker"].upper()} agreement score</div>
+                    <div style="font-weight:700; font-size:1.5rem; color:var(--accent-strong);">{pct:.0f}%</div>
                   </div>
                   <div class="v-sub" style="margin-top:8px;">A second, independent checker
                   (a different kind of AI — not the one that judged above) was also asked
@@ -992,9 +1168,9 @@ if battle_clicked and demo_q:
                 st.markdown(
                     """
                     <div class="mg-card" style="padding:14px 18px;">
-                      <div style="font-weight:700; font-size:1.05rem; color:#1a7f37;">
+                      <div style="font-weight:700; font-size:1.05rem; color:var(--pass);">
                         THE RAG BOT DECLINED TO ANSWER — the honest move</div>
-                      <div style="color:#6b7a8d; margin-top:6px; font-size:.92rem;">
+                      <div style="color:var(--muted); margin-top:6px; font-size:.92rem;">
                         The guideline page doesn't answer this question, so the grounded bot
                         refused instead of guessing. (The judge technically flags the refusal
                         sentence — "the source does talk about this topic" — but refusing
@@ -1044,12 +1220,12 @@ if not run_clicked and not st.session_state.get("mg_history"):
     st.markdown(
         """
         <div class="mg-card" style="text-align:center; padding:34px 26px; margin-top:8px;">
-          <div style="font-weight:700; font-size:1.25rem; color:#2c3e50; margin-top:6px;">
+          <div style="font-weight:700; font-size:1.25rem; color:var(--text); margin-top:6px;">
             Ready when you are
           </div>
-          <div style="color:#6b7a8d; margin-top:8px; font-size:.95rem;">
+          <div style="color:var(--muted); margin-top:8px; font-size:.95rem;">
             Paste a question + an AI answer above (or pick an example in the sidebar),
-            then press <b style="color:#0066cc;">Audit this answer</b>.<br>
+            then press <b style="color:var(--accent-strong);">Audit this answer</b>.<br>
             Every claim gets checked against an official guideline — and you'll see
             exactly which guideline said what.
           </div>

@@ -76,9 +76,14 @@ btn_labels = [b.label for b in at.button]
 check("labels: audit button is 'Audit this answer'", "Audit this answer" in btn_labels)
 check("labels: battle button is 'Run the classroom demo'",
       "Run the classroom demo" in btn_labels)
-check("labels: radio options de-emojified",
-      at.radio and at.radio[0].options
-      and list(at.radio[0].options) == ["Thorough (full audit)", "Fast (skip final review)"],
+
+# Two radios now: [0]=Theme (Light/Dark), [1]=Audit depth.
+check("labels: theme selector present",
+      bool(at.radio) and "Light" in (at.radio[0].options or []) and "Dark" in (at.radio[0].options),
+      str([r.options for r in at.radio]))
+depth = at.radio[-1] if len(at.radio) > 1 else None
+check("labels: audit-depth options de-emojified",
+      depth is not None and list(depth.options) == ["Thorough (full audit)", "Fast (skip final review)"],
       str([r.options for r in at.radio]))
 
 texts: list[str] = []
@@ -102,6 +107,26 @@ check("boot UI: zero emoji in any rendered string", not ui_emoji, str(ui_emoji))
 
 check("boot UI: golden case prefilled",
       sum(1 for ta in at.text_area if ta.value and ta.value.strip()) == 3)
+
+# ---------------------------------------------------------------------------
+# 2b. Theme modes — selector switches the palette tokens, no exceptions
+# ---------------------------------------------------------------------------
+theme_radio = at.radio[0] if (at.radio and "Dark" in (at.radio[0].options or [])) else None
+if theme_radio is not None:
+    theme_radio.set_value("Dark")
+    at.run()
+    css_dark = "\n".join((m.value or "") for m in at.markdown)
+    check("theme: Dark mode injects dark palette",
+          "--bg: #0d131a" in css_dark and "--surface: #151e29" in css_dark)
+    check("theme: no exception in Dark mode", not at.exception,
+          str(at.exception[0].value)[:300] if at.exception else "")
+    if at.radio and "Light" in (at.radio[0].options or []):
+        at.radio[0].set_value("Light")
+        at.run()
+    css_light = "\n".join((m.value or "") for m in at.markdown)
+    check("theme: Light mode restores light palette", "--bg: #fafbfc" in css_light)
+    check("theme: no exception after switching back", not at.exception,
+          str(at.exception[0].value)[:300] if at.exception else "")
 
 # ---------------------------------------------------------------------------
 # 3. Real audit on the golden case (checker=none for Cloud parity, Thorough)
