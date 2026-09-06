@@ -30,3 +30,8 @@ Thumbs.db
 .streamlit/secrets.toml
 .streamlit_test.log
 .streamlit_test*.log
+
+# --- Internal working docs (stay local, not for the public repo) ---
+HANDOFF_MEMORY_PACK.md
+RESEARCH_AND_PLAN.md
+_research/
